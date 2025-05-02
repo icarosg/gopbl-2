@@ -18,6 +18,13 @@ type Pagamento struct {
 	ID_posto string  `json:"id_posto"`
 }
 
+type ReqAtomica struct {
+	Veiculo Veiculo `json:"veiculo"`
+	Posto1 Posto   `json:"posto-1"`
+	Posto2 Posto  `json:"posto-2"`
+	Posto3 Posto `json:"posto-3"`
+}
+
 // type estruturaVeiculo struct {
 // 	Latitude            float64 `json:"latitude"`
 // 	Longitude           float64 `json:"longitude"`

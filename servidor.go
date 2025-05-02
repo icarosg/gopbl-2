@@ -55,13 +55,15 @@ func main() {
 	setupMQTT()
 	defer mqttClient.Disconnect(250)
 
+	gin.DisableBindValidation()
+	gin.SetMode(gin.ReleaseMode)
 	rota := gin.Default()
 	// rota.GET("/ping", func(c *gin.Context) {
 	// 	c.JSON(200, gin.H{
 	// 		"message": "pong",
 	// 	})
-	// })
-	rota.Run("localhost:8080")
+	// })	
+	rota.Run("localhost:8080")	
 	fmt.Println("Servidor iniciado e conectado ao MQTT Broker")
 
 }
@@ -102,4 +104,23 @@ func setupMQTT() {
 
 	// Subscrever aos tópicos necessários
 	subscribeToTopics()
+
+	go func(){
+		for {
+			fmt.Println("Menu")
+			fmt.Println("1 - enviar mensagem pro cliente")
+			var opcao int
+			fmt.Scanln(&opcao)
+			switch opcao {
+			case 1:
+				fmt.Println("Digite a mensagem")
+				var mensagem string
+				fmt.Scanln(&mensagem)
+				mqttClient.Publish("topic/testar", 0, false, mensagem)
+			}
+		}
+		
+
+	}()
+
 }

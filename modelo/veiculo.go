@@ -6,6 +6,7 @@ package modelo
 
 import (
 	//"fmt"
+	"fmt"
 	"math/rand"
 )
 
@@ -14,9 +15,8 @@ type Veiculo struct {
 	Latitude            float64
 	Longitude           float64
 	Bateria             float64
-	IsCarregando        bool
-	IsDeslocandoAoPosto bool
-	Pagamentos          []Pagamento
+	descarregamento 	int
+	isDeslocando        bool
 }
 
 func NovoVeiculo(id string, inicialLat float64, inicialLong float64) Veiculo {
@@ -25,115 +25,12 @@ func NovoVeiculo(id string, inicialLat float64, inicialLong float64) Veiculo {
 		Latitude:            inicialLat,
 		Longitude:           inicialLong,
 		Bateria:             100.0, // começa com bateria cheia
-		IsCarregando:        false,
-		IsDeslocandoAoPosto: false,
+		isDeslocando:        false,
+		descarregamento: 	 rand.Intn(3), // 0: lenta, 1: normal, 2: rapida
 	}
 }
 
-// func adicionarPagamento(v *Veiculo, p PagamentoJson) {
-
-// 	*v.Pagamentos = append(*v.Pagamentos, p)
-
-// }
-
-func AtualizarLocalizacao(v *Veiculo) {
-	if !v.IsDeslocandoAoPosto && !v.IsCarregando {
-		v.Latitude += float64(rand.Intn(11) - 5) //valor entre 5 e -5
-		v.Longitude += float64(rand.Intn(11) - 5)
-
-		// fmt.Println("_________________________________________________________________________________________________")
-		// fmt.Printf("localalizacao atual do veiculo: latitude %.4f e longitude %.4f\n", v.Latitude, v.Longitude)
-		// fmt.Println("_________________________________________________________________________________________________")
-		DiminuirNivelBateria(v)
-	}
+func (v Veiculo) String() string {
+	return fmt.Sprintf("Veiculo id:%s\n Veiculo na posicao (%.4f, %.4f)\n Bateria: %.2f\n Deslocando: %t\n Descarregamento: %d (0 - lento, 1 - normal, 2 - rapido)\n", v.ID, v.Latitude, v.Longitude, v.Bateria, v.isDeslocando, v.descarregamento)
 }
 
-func DiminuirNivelBateria(v *Veiculo) {
-	if !v.IsCarregando {
-		// diminui a bateria entre 3.0 e 1.0 por atualização
-		v.Bateria -= rand.Float64()*3.0 + 1.0
-		if v.Bateria < 10 {
-			v.Bateria = 10
-		}
-	}
-}
-
-func DeslocarParaPosto(v *Veiculo, p *Posto) {
-	if v.Latitude < p.Latitude {
-		if p.Latitude-v.Latitude <= 5 {
-			v.Latitude = p.Latitude
-		} else {
-			v.Latitude += 5
-		}
-	} else if v.Latitude > p.Latitude {
-		if v.Latitude-p.Latitude <= 5 {
-			v.Latitude = p.Latitude
-		} else {
-			v.Latitude -= 5
-		}
-	}
-
-	if v.Longitude < p.Longitude {
-		if p.Longitude-v.Longitude <= 5 {
-			v.Longitude = p.Longitude
-		} else {
-			v.Longitude += 5
-		}
-	} else if v.Longitude > p.Longitude {
-		if v.Longitude-p.Longitude <= 5 {
-			v.Longitude = p.Longitude
-		} else {
-			v.Longitude -= 5
-		}
-	}
-
-	if !v.IsCarregando {
-		// diminui a bateria entre 3.0 e 1.0 por atualização
-		v.Bateria -= rand.Float64()*3.0 + 1.0
-		if v.Bateria < 10 {
-			v.Bateria = 10
-		}
-	}
-}
-
-func GetNivelBateriaAoChegarNoPosto(v Veiculo, p *Posto) float64 {
-	for v.Latitude != p.Latitude || v.Longitude != p.Longitude {
-		if v.Latitude < p.Latitude {
-			if p.Latitude-v.Latitude <= 5 {
-				v.Latitude = p.Latitude
-			} else {
-				v.Latitude += 5
-			}
-		} else if v.Latitude > p.Latitude {
-			if v.Latitude-p.Latitude <= 5 {
-				v.Latitude = p.Latitude
-			} else {
-				v.Latitude -= 5
-			}
-		}
-
-		if v.Longitude < p.Longitude {
-			if p.Longitude-v.Longitude <= 5 {
-				v.Longitude = p.Longitude
-			} else {
-				v.Longitude += 5
-			}
-		} else if v.Longitude > p.Longitude {
-			if v.Longitude-p.Longitude <= 5 {
-				v.Longitude = p.Longitude
-			} else {
-				v.Longitude -= 5
-			}
-		}
-
-		if !v.IsCarregando {
-			// diminui a bateria entre 3.0 e 1.0 por atualização
-			v.Bateria -= rand.Float64()*3.0 + 1.0
-			if v.Bateria < 10 {
-				v.Bateria = 10
-			}
-		}
-	}
-
-	return v.Bateria
-}
