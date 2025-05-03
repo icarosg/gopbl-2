@@ -2,125 +2,38 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"sync"
+
+	//mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
-	MQTT "github.com/eclipse/paho.mqtt.golang"
-	//"net/http"
-	// "os"
-	//"sync"
-	"time"
-	//"gopbl-2/modelo"
-	// "io"
-	// "log"
-	// "math"
-	// "net"
-	"encoding/json"
 )
 
-type PostoJson struct {
-	ID              string  `json:"id"`
-	Latitude        float64 `json:"latitude"`
-	Longitude       float64 `json:"longitude"`
-	QuantidadeFila  int     `json:"quantidade de carros na fila"`
-	Disponibilidade bool    `json:"bomba disponivel"`
+// gerenciador de tópicos. quais clientes estão inscritos em quais tópicos
+type GerenciadorTopicos struct {
+	sync.RWMutex
+	inscricao map[string]string // tópico ->  cliente (só haverá 1)
 }
 
-type PagamentoJson struct {
-	ID_veiculo string  `json:"id_veiculo"`
-	Valor      float64 `json:"valor"`
-	Posto      string  `json:"id_posto"`
+var gerenciadorTopicos = GerenciadorTopicos{
+	inscricao: make(map[string]string),
 }
 
-type Requisicao struct {
-	Comando string          `json:"comando"`
-	Dados   json.RawMessage `json:"dados"`
-}
+// função para registrar inscrição via API
+func inscreverNoTopico(c *gin.Context) {
+	topico := c.PostForm("topic")
+	clientID := c.PostForm("clientID")
 
-var messagePubHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Message) {
-	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
-}
+	gerenciadorTopicos.Lock()
+	gerenciadorTopicos.inscricao[topico] = clientID
+	gerenciadorTopicos.Unlock()
 
-var connectHandler MQTT.OnConnectHandler = func(client MQTT.Client) {
-	fmt.Println("Connected to MQTT Broker")
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%s subscribed to %s", clientID, topico)})
 }
-
-var connectLostHandler MQTT.ConnectionLostHandler = func(client MQTT.Client, err error) {
-	fmt.Printf("Connect lost: %v", err)
-}
-
-// Variável global para o cliente MQTT
-var mqttClient MQTT.Client
 
 func main() {
+	r := gin.Default()
+	r.POST("/subscribe", inscreverNoTopico)
 
-	setupMQTT()
-	defer mqttClient.Disconnect(250)
-
-	gin.DisableBindValidation()
-	gin.SetMode(gin.ReleaseMode)
-	rota := gin.Default()
-	// rota.GET("/ping", func(c *gin.Context) {
-	// 	c.JSON(200, gin.H{
-	// 		"message": "pong",
-	// 	})
-	// })	
-	rota.Run("localhost:8080")	
-	fmt.Println("Servidor iniciado e conectado ao MQTT Broker")
-
-}
-
-func subscribeToTopics() {
-	// Exemplo de subscription
-	topic := "topic/receba"
-	//token := mqttClient.Subscribe(topic, 1, nil)
-	
-	token := mqttClient.Subscribe(topic, 1, nil)
-
-	token.Wait()
-	fmt.Printf("Subscribed to topic: %s\n", topic)
-}
-
-func publishMessage(topic string, message string) {
-	token := mqttClient.Publish(topic, 0, false, message)
-	token.Wait()
-	time.Sleep(time.Second)
-}
-
-func setupMQTT() {
-	var broker = "localhost"
-	var port = 1883
-	opts := MQTT.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", broker, port))
-	opts.SetClientID("go_mqtt_server")
-	opts.SetUsername("emqx")
-	opts.SetPassword("public")
-	opts.SetDefaultPublishHandler(messagePubHandler)
-	opts.OnConnect = connectHandler
-	opts.OnConnectionLost = connectLostHandler
-
-	mqttClient = MQTT.NewClient(opts)
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
-	}
-
-	// Subscrever aos tópicos necessários
-	subscribeToTopics()
-
-	go func(){
-		for {
-			fmt.Println("Menu")
-			fmt.Println("1 - enviar mensagem pro cliente")
-			var opcao int
-			fmt.Scanln(&opcao)
-			switch opcao {
-			case 1:
-				fmt.Println("Digite a mensagem")
-				var mensagem string
-				fmt.Scanln(&mensagem)
-				mqttClient.Publish("topic/testar", 0, false, mensagem)
-			}
-		}
-		
-
-	}()
-
+	r.Run(":8080")
 }
