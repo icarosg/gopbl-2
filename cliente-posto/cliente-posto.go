@@ -42,7 +42,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		err := json.Unmarshal(msg.Payload(), &postos_servidor_C)
 		if err != nil {
 			fmt.Printf("Error decoding payload: %v\n", err)
-		}		
+		}
 	}
 }
 
@@ -80,7 +80,7 @@ func main() {
 
 func publish(client mqtt.Client) {
 	//num := 10
-	token := client.Publish("topic/receba",0,false,"receba")
+	token := client.Publish("topic/receba", 0, false, "receba")
 	token.Wait()
 	// for i := 0; i < num; i++ {
 	// 	text := fmt.Sprintf("Message %d", i)
@@ -91,25 +91,25 @@ func publish(client mqtt.Client) {
 }
 
 func sub(client mqtt.Client) {
-	    // topic := "topic/test"
-	    // token := client.Subscribe(topic, 1, nil)
-		//client.Subscribe("topic/testar", 1, nil)
-	    //token.Wait()
-		topic := "topic/consulta-cliente-1-A"
-		token := client.Subscribe(topic, 1, nil)
-		token.Wait()
+	// topic := "topic/test"
+	// token := client.Subscribe(topic, 1, nil)
+	//client.Subscribe("topic/testar", 1, nil)
+	//token.Wait()
+	topic := "topic/consulta-cliente-1-A"
+	token := client.Subscribe(topic, 1, nil)
+	token.Wait()
 
-		topic = "topic/consulta-cliente-1-B"
-		token = client.Subscribe(topic, 1, nil)
-		token.Wait()
+	topic = "topic/consulta-cliente-1-B"
+	token = client.Subscribe(topic, 1, nil)
+	token.Wait()
 
-		topic = "topic/consulta-cliente-1-C"
-		token = client.Subscribe(topic, 1, nil)
-		token.Wait()
-	  //fmt.Printf("Subscribed to topic: %s", topic)
+	topic = "topic/consulta-cliente-1-C"
+	token = client.Subscribe(topic, 1, nil)
+	token.Wait()
+	//fmt.Printf("Subscribed to topic: %s", topic)
 }
 
-func menu(client mqtt.Client){
+func menu(client mqtt.Client) {
 	for {
 		fmt.Println("1 - cadastrar veiculo")
 		fmt.Println("2 - atualizar posiçao veiculo")
@@ -122,7 +122,7 @@ func menu(client mqtt.Client){
 		case 1:
 			fmt.Println("digite o ID do veiculo")
 			var id string
-			fmt.Scanf("%s",&id)
+			fmt.Scanf("%s", &id)
 			fmt.Println("digite a Latitude do veiculo")
 			var lat float64
 			fmt.Scanf("%f", &lat)
@@ -143,7 +143,7 @@ func menu(client mqtt.Client){
 			var long float64
 			fmt.Scanf("%f", &long)
 			veiculo.Latitude = lat
-			veiculo.Longitude = long	
+			veiculo.Longitude = long
 			fmt.Println(veiculo)
 		case 3:
 			if !cadastrado {
@@ -162,21 +162,21 @@ func menu(client mqtt.Client){
 			fmt.Println("postos de recarga encontrados:")
 			fmt.Println("****************************")
 			fmt.Println("Postos do servidor A:")
-			for i := range postos_servidor_A{
+			for i := range postos_servidor_A {
 				p := postos_servidor_A[i]
-				fmt.Println(" ",p)
+				fmt.Println(" ", p)
 			}
 			fmt.Println("****************************")
 			fmt.Println("Postos do servidor B:")
-			for i := range postos_servidor_B{
+			for i := range postos_servidor_B {
 				p := postos_servidor_B[i]
-				fmt.Println(" ",p)
+				fmt.Println(" ", p)
 			}
 			fmt.Println("****************************")
 			fmt.Println("Postos do servidor C:")
-			for i := range postos_servidor_C{
+			for i := range postos_servidor_C {
 				p := postos_servidor_C[i]
-				fmt.Println(" ",p)
+				fmt.Println(" ", p)
 			}
 		case 4:
 			if !cadastrado {
@@ -187,9 +187,9 @@ func menu(client mqtt.Client){
 			var input string
 			fmt.Scanf("%s", &input)
 			sequencia := strings.Split(strings.ToUpper(input), ",")
-			
+
 			var posto modelo.Posto
-			for _, servidor := range sequencia {				
+			for _, servidor := range sequencia {
 				switch servidor {
 				case "A":
 					fmt.Print("Digite o ID do posto do servidor A: ")
@@ -202,7 +202,7 @@ func menu(client mqtt.Client){
 					}
 					fmt.Println("Posto do servidor A encontrado:", posto)
 					rota = append(rota, posto)
-		
+
 				case "B":
 					fmt.Print("Digite o ID do posto do servidor B: ")
 					var id string
@@ -229,17 +229,17 @@ func menu(client mqtt.Client){
 					fmt.Println("Servidor inválido:", servidor)
 					return
 				}
-				
+
 			}
 			req := modelo.ReqAtomica{
 				Veiculo: veiculo,
-				Posto1: rota[0],
-				Posto2: rota[1],
-				Posto3: rota[2],
+				Posto1:  rota[0],
+				Posto2:  rota[1],
+				Posto3:  rota[2],
 			}
-			client.Publish("topic/reqAtomica",0,false,req)
+			client.Publish("topic/reqAtomica", 0, false, req)
 			fmt.Println("Todos os postos foram processados com sucesso.")
 		}
 	}
-	
+
 }
