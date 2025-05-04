@@ -3,17 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"gopbl-2/modelo"
 	"net/http"
-	//mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var veiculo modelo.Veiculo
 var cadastrado bool = false
 var endereco string
 
+var client mqtt.Client
+var opts *mqtt.ClientOptions
+
 func main() {
-	endereco = selecionarServidorManual()
+	endereco = selecionarServidorManual() // para o http
 
 	go menu() //conecta ao servidor após o cadastro do veículo
 
@@ -31,6 +34,77 @@ func selecionarServidorManual() string {
 	fmt.Scanln(&porta)
 
 	return fmt.Sprintf("http://%s:%s", ip, porta)
+}
+
+func conectarAoBroker() {
+	if veiculo.ID != "" {
+
+		opts = mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
+
+		opts.SetClientID(veiculo.ID)
+
+		client = mqtt.NewClient(opts)
+		if token := client.Connect(); token.Wait() && token.Error() != nil {
+			fmt.Println("Erro ao conectar ao broker:", token.Error())
+			return
+		}
+
+		fmt.Printf("Conectado ao broker MQTT em tcp://localhost:1883\n")
+	}
+}
+
+func publicarReserva(p modelo.Posto) {
+	if veiculo.ID != "" {
+		payload, _ := json.Marshal(p)
+		token := client.Publish("reserva/"+veiculo.ID, 0, false, payload)
+		token.Wait()
+		fmt.Println("Publicado a possível reserva do posto.")
+	}
+}
+
+func listarPostos() []modelo.Posto {
+	resp, err := http.Get(endereco + "/postos")
+	if err != nil {
+		fmt.Println("Erro ao consultar:", err)
+		return []modelo.Posto{}
+	}
+	resp.Body.Close()
+
+	var postos []modelo.Posto
+	err = json.NewDecoder(resp.Body).Decode(&postos)
+	if err != nil {
+		fmt.Println("Erro ao decodificar resposta:", err)
+		return []modelo.Posto{}
+	}
+
+	fmt.Printf("\n\nPostos disponíveis:\n")
+	for _, p := range postos {
+		fmt.Printf("- %s (%f, %f)\n", p.ID, p.Latitude, p.Longitude)
+	}
+
+	return postos
+}
+
+func procurarPostosParaReserva(postos []modelo.Posto) {
+	var reserva string
+
+	fmt.Println("Digite o ID dos postos que deseja reservar, em rodem: ")
+	fmt.Println("Digite 1, caso deseje sair")
+	for {
+		fmt.Scanln(&reserva)
+
+		if reserva == "1" || reserva == "" {
+			return
+		}
+
+		for _, p := range postos {
+			if (p.ID == reserva) {
+				publicarReserva(p)
+				return
+			}
+		}
+
+	}
 }
 
 func menu() {
@@ -58,6 +132,8 @@ func menu() {
 			cadastrado = true
 			fmt.Println("Veículo cadastrado:", veiculo)
 
+			conectarAoBroker() //----------------------------------------------------------------------------------------------------
+
 		case 2:
 			if !cadastrado {
 				fmt.Println("Veículo não cadastrado!")
@@ -74,26 +150,15 @@ func menu() {
 			fmt.Println("Veículo atualizado:", veiculo)
 
 		case 3:
-			resp, erro := http.Get(endereco + "/postos")
-			if erro != nil {
-				fmt.Println("Erro ao consultar:", erro)
-				continue
+			listarPostos()
+		case 4:
+			postos := listarPostos()
+
+			if len(postos) > 0 {
+				procurarPostosParaReserva(postos)
+			} else {
+				fmt.Println("Postos não encontrado.")
 			}
-
-			var postos []modelo.Posto
-			erro = json.NewDecoder(resp.Body).Decode(&postos)
-			resp.Body.Close()
-
-			if erro != nil {
-				fmt.Println("Erro ao decodificar resposta:", erro)
-				continue
-			}
-
-			fmt.Printf("\n\nPostos disponíveis:\n")
-			for _, p := range postos {
-				fmt.Printf("- %s (%f, %f)\n", p.ID, p.Latitude, p.Longitude)
-			}
-
 		default:
 			fmt.Println("Opção inválida.")
 		}

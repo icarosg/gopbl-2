@@ -1,6 +1,10 @@
 package main
 
 import (
+	"gopbl-2/db"
+	"gopbl-2/modelo"
+	"gopbl-2/models"
+
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,20 +12,26 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Dados do posto
 type Posto struct {
-	ID        string  `json:"id"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Disponivel bool   `json:"disponivel"`
+	ID         string  `json:"id"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	Disponivel bool    `json:"disponivel"`
 }
 
 var (
 	postos = make(map[string]*Posto)
 	mutex  = sync.RWMutex{}
 )
+
+var clienteDB *mongo.Client
 
 // recebe mensagem MQTT do posto e atualiza o mapa
 var mqttHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
@@ -38,48 +48,61 @@ var mqttHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message)
 }
 
 func main() {
-	// conectar ao broker MQTT
-	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883").SetClientID("servidor-api-1")
-	opts.OnConnect = func(c mqtt.Client) {
-		fmt.Println("Conectado ao broker MQTT")
-		if token := c.Subscribe("postos/+", 0, mqttHandler); token.Wait() && token.Error() != nil {
-			panic(token.Error())
-		}
+	// Conectar ao MongoDB
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var err error
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	client, err = mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		log.Fatal("Erro ao conectar ao MongoDB:", err)
 	}
 
-	client := mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+	// Testar conexão
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		log.Fatal("MongoDB indisponível:", err)
 	}
+	fmt.Println("✅ Conectado ao MongoDB com sucesso!")
 
-	// API REST
+	// Criar o servidor Gin
 	router := gin.Default()
 
-	// GET - listar postos disponíveis
-	router.GET("/postos", func(c *gin.Context) {
-		mutex.RLock()
-		defer mutex.RUnlock()
-		lista := []*Posto{}
-		for _, p := range postos {
-			if p.Disponivel {
-				lista = append(lista, p)
-			}
-		}
-		c.JSON(http.StatusOK, lista)
-	})
+	// Registrar rota
+	router.POST("/publicar", publicarPostoHandler)
 
-	// POST - reservar posto (disponível -> falso)
-	router.POST("/reservar/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		mutex.Lock()
-		defer mutex.Unlock()
-		if posto, ok := postos[id]; ok && posto.Disponivel {
-			posto.Disponivel = false
-			c.JSON(http.StatusOK, gin.H{"message": "Posto reservado com sucesso"})
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Posto não encontrado ou já reservado"})
-		}
-	})
+	// Rodar servidor
+	router.Run(":8080")
+}
 
-	router.Run(":8082")
+func cadastrarPostoHandler(c *gin.Context) {
+	var novoPosto modelo.Posto
+
+	if erro := c.ShouldBindJSON(&novoPosto); erro != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "JSON inválido"})
+		return
+	}
+
+	collection := clienteDB.Database("reservasRedes").Collection("postos")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// verifica se já existe um posto com mesmo nome
+	filter := bson.M{"ID": novoPosto.ID}
+	var existente modelo.Posto
+	erro := collection.FindOne(ctx, filter).Decode(&existente)
+	if erro == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Posto já existente"})
+		return
+	}
+
+	// se não encontrar, insere
+	_, erro = collection.InsertOne(ctx, novoPosto)
+	if erro != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao inserir o posto"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Posto publicado com sucesso"})
 }

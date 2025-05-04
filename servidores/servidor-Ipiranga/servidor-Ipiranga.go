@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Dados do posto
 type Posto struct {
 	ID        string  `json:"id"`
 	Latitude  float64 `json:"latitude"`
@@ -39,7 +38,7 @@ var mqttHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message)
 
 func main() {
 	// conectar ao broker MQTT
-	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883").SetClientID("servidor-api")
+	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883").SetClientID("servidor-api-ipiranga")
 	opts.OnConnect = func(c mqtt.Client) {
 		fmt.Println("Conectado ao broker MQTT")
 		if token := c.Subscribe("postos/+", 0, mqttHandler); token.Wait() && token.Error() != nil {
