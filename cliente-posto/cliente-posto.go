@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"gopbl-2/modelo"
 	"time"
@@ -34,18 +35,16 @@ func main() {
 
 	// publica atualização
 	for {
-		topic := "postos/" + posto_criado.ID
-		payload := fmt.Sprintf("Posto %s disponível", posto_criado.ID)
-		token := client.Publish(topic, 0, false, payload)
+		payload, _ := json.Marshal(posto_criado)
+		token := client.Publish("postos/"+posto_criado.ID, 0, false, payload)
 		token.Wait()
-
-		fmt.Println("📤 Publicado em", topic)
+		fmt.Println("Publicado estado do posto.")
 		time.Sleep(5 * time.Second)
 	}
 }
 
 func cadastrarPosto() {
-	// fmt.Println("🛠️  Cadastro do Posto")
+	// fmt.Println("Cadastro do Posto")
 	// fmt.Print("Digite o ID do posto: ")
 	// fmt.Scanln(&id)
 	// fmt.Print("Digite a latitude do posto: ")

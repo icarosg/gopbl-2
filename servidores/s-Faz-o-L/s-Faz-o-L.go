@@ -39,7 +39,7 @@ var mqttHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message)
 
 func main() {
 	// conectar ao broker MQTT
-	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883").SetClientID("servidor-api")
+	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883").SetClientID("servidor-api-1")
 	opts.OnConnect = func(c mqtt.Client) {
 		fmt.Println("Conectado ao broker MQTT")
 		if token := c.Subscribe("postos/+", 0, mqttHandler); token.Wait() && token.Error() != nil {
@@ -81,5 +81,5 @@ func main() {
 		}
 	})
 
-	router.Run(":8084")
+	router.Run(":8082")
 }

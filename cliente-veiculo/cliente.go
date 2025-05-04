@@ -1,33 +1,36 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"gopbl-2/modelo"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"net/http"
+	//mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var veiculo modelo.Veiculo
 var cadastrado bool = false
-var client mqtt.Client
+var endereco string
 
 func main() {
+	endereco = selecionarServidorManual()
+
 	go menu() //conecta ao servidor após o cadastro do veículo
 
 	select {} // mantém o cliente vivo e aguardando interações
 }
 
-// Função para selecionar o servidor MQTT manualmente
 func selecionarServidorManual() string {
 	var ip string
 	var porta string
 
-	fmt.Println("Conexão com servidor MQTT")
+	fmt.Println("Conexão com servidor")
 	fmt.Print("Digite o IP do servidor (ex: 127.0.0.1): ")
 	fmt.Scanln(&ip)
-	fmt.Print("Digite a porta (ex: 1883): ")
+	fmt.Print("Digite a porta (ex: 8080): ")
 	fmt.Scanln(&porta)
 
-	return fmt.Sprintf("tcp://%s:%s", ip, porta)
+	return fmt.Sprintf("http://%s:%s", ip, porta)
 }
 
 func menu() {
@@ -35,7 +38,8 @@ func menu() {
 		fmt.Println("\nMenu de Ações:")
 		fmt.Println("1 - Cadastrar veículo")
 		fmt.Println("2 - Atualizar posição do veículo")
-		fmt.Println("3 - Inscrição em tópicos (Para veículo)")
+		fmt.Println("3 - Consultar postos disponíveis")
+		fmt.Println("4 - Reservar posto")
 		var opcao int
 		fmt.Scanf("%d", &opcao)
 
@@ -54,22 +58,6 @@ func menu() {
 			cadastrado = true
 			fmt.Println("Veículo cadastrado:", veiculo)
 
-
-
-			// conecta ao servidor MQTT apenas após o cadastro do veículo
-			endereco := selecionarServidorManual()
-
-			opts := mqtt.NewClientOptions().AddBroker(endereco)
-			opts.SetClientID(veiculo.ID)
-
-			client = mqtt.NewClient(opts)
-			if token := client.Connect(); token.Wait() && token.Error() != nil {
-				fmt.Println("Erro ao conectar ao broker:", token.Error())
-				return
-			}
-
-			fmt.Printf("Conectado ao broker MQTT em %s com clientID: %s\n", endereco, veiculo.ID)
-
 		case 2:
 			if !cadastrado {
 				fmt.Println("Veículo não cadastrado!")
@@ -86,28 +74,28 @@ func menu() {
 			fmt.Println("Veículo atualizado:", veiculo)
 
 		case 3:
-			// inscrição em tópicos MQTT
-			if !cadastrado {
-				fmt.Println("Você precisa cadastrar o veículo primeiro.")
+			resp, erro := http.Get(endereco + "/postos")
+			if erro != nil {
+				fmt.Println("Erro ao consultar:", erro)
 				continue
 			}
-			inscreverEmTopicos(client) // colocar para listar os postos
+
+			var postos []modelo.Posto
+			erro = json.NewDecoder(resp.Body).Decode(&postos)
+			resp.Body.Close()
+
+			if erro != nil {
+				fmt.Println("Erro ao decodificar resposta:", erro)
+				continue
+			}
+
+			fmt.Printf("\n\nPostos disponíveis:\n")
+			for _, p := range postos {
+				fmt.Printf("- %s (%f, %f)\n", p.ID, p.Latitude, p.Longitude)
+			}
 
 		default:
 			fmt.Println("Opção inválida.")
 		}
-	}
-}
-
-func inscreverEmTopicos(client mqtt.Client) {
-	fmt.Println("Inscrevendo em tópicos...")
-	// exemplificando inscrição em tópicos
-	tópicos := []string{"veiculos/posicao", "veiculos/status"}
-	for _, topico := range tópicos {
-		token := client.Subscribe(topico, 0, func(client mqtt.Client, msg mqtt.Message) {
-			fmt.Printf("Mensagem recebida no tópico %s: %s\n", msg.Topic(), string(msg.Payload()))
-		})
-		token.Wait()
-		fmt.Printf("Inscrito no tópico: %s\n", topico)
 	}
 }
