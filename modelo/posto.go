@@ -13,7 +13,7 @@ type Posto struct {
 	Latitude     float64
 	Longitude    float64
 	//mu           sync.Mutex
-	Fila         []*Veiculo
+	Fila         Veiculo
 	QtdFila      int
 	BombaOcupada bool
 }
@@ -26,13 +26,12 @@ func NovoPosto(id string, lat float64, long float64) Posto {
 		ID:           id,
 		Latitude:     lat,
 		Longitude:    long,
-		Fila:         make([]*Veiculo, 0),
 		QtdFila:      0,
 		BombaOcupada: false,
 	}
 }
 
 func (p Posto) String() string {
-	return fmt.Sprintf("Posto id:%s\n Posto localizado em (%.4f, %.4f)\n ", p.ID, p.Latitude, p.Longitude)
+	return fmt.Sprintf("Posto id:%s\n Posto localizado em (%.4f, %.4f)\n bomba ocupada:  %t\n", p.ID, p.Latitude, p.Longitude,p.BombaOcupada)
 }
 

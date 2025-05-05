@@ -12,6 +12,11 @@ type PagamentoJson struct {
 	ID_posto string  `json:"id_posto"`
 }
 
+type PostoConsulta struct {
+	ID 			string  `json:"id"`
+	Posto       Posto	`json:"posto"`
+}
+
 type Pagamento struct {
 	Veiculo  string `json:"id_veiculo"`
 	Valor    float64 `json:"valor"`
