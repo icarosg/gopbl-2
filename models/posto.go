@@ -6,3 +6,8 @@ type Posto struct {
 	Longitude float64 `json:"longitude" bson:"longitude"`
 	Reservado bool    `json:"reservado" bson:"reservado"`
 }
+
+type ReservaData struct {
+	IDPostos []string `json:"idPostos"`
+	Reservar bool     `json:"reservar"`
+}

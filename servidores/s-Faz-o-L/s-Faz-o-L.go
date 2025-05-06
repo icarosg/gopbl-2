@@ -4,7 +4,7 @@ import (
 	"gopbl-2/db"
 	"gopbl-2/modelo"
 
-	//"gopbl-2/models"
+	"gopbl-2/models"
 
 	"context"
 	//"encoding/json"
@@ -93,33 +93,51 @@ func cadastrarPostoHandler(c *gin.Context) {
 }
 
 func editarPostoHandler(c *gin.Context) {
-	var idsParaAtualizar []string
+	var data models.ReservaData
 
-	if erro := c.ShouldBindJSON(&idsParaAtualizar); erro != nil {
+	if erro := c.ShouldBindJSON(&data); erro != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "JSON inválido."})
 		return
 	}
 
-	fmt.Println("test", idsParaAtualizar)
+	fmt.Println("test", data)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// verifica se todos os postos estão disponíveis
-	filter := bson.M{"id": bson.M{"$in": idsParaAtualizar}, "disponivel": true} //$in retorna os documentos cujo ID esteja dentro da lista fornecida.
-	cont, err := db.PostosCollection.CountDocuments(ctx, filter)
-	if err != nil || cont != int64(len(idsParaAtualizar)) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nem todos os postos estão disponíveis"})
-		return
-	}
+	if data.Reservar {
+		// verifica se todos os postos estão disponíveis
+		filter := bson.M{"id": bson.M{"$in": data.IDPostos}, "disponivel": true} //$in retorna os documentos o qual o ID esteja dentro da lista fornecida
+		cont, err := db.PostosCollection.CountDocuments(ctx, filter)
+		if err != nil || cont != int64(len(data.IDPostos)) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nem todos os postos estão disponíveis"})
+			return
+		}
 
-	// atualiza todos
-	update := bson.M{"$set": bson.M{"disponivel": false}}
-	
-	_, err = db.PostosCollection.UpdateMany(ctx, filter, update)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar os postos"})
-		return
+		// atualiza todos
+		update := bson.M{"$set": bson.M{"disponivel": false}}
+
+		_, err = db.PostosCollection.UpdateMany(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar os postos"})
+			return
+		}
+	} else {
+		filter := bson.M{"id": bson.M{"$in": data.IDPostos}, "disponivel": false}
+		cont, err := db.PostosCollection.CountDocuments(ctx, filter)
+		if err != nil || cont != int64(len(data.IDPostos)) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nem todos os postos estão indisponíveis"})
+			return
+		}
+
+		// atualiza todos
+		update := bson.M{"$set": bson.M{"disponivel": true}}
+
+		_, err = db.PostosCollection.UpdateMany(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar os postos"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Postos atualizados com sucesso"})

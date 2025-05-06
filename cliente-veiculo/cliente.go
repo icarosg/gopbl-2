@@ -15,6 +15,8 @@ var veiculo modelo.Veiculo
 var cadastrado bool = false
 var endereco string
 
+var idPostos []string
+
 var client mqtt.Client
 var opts *mqtt.ClientOptions
 
@@ -76,29 +78,66 @@ func conectarAoBroker() {
 	}
 }
 
-func onSubmit(idPostos []string) {
-	putData, erro := json.Marshal(idPostos) //converte para json
-	if erro != nil {
-		fmt.Println("Erro ao codificar JSON:", erro)
-		return
-	}
+func onSubmit(idPostos []string, reservar bool) {
+	if reservar {
+		putData, erro := json.Marshal(struct {
+			IDPostos []string `json:"idPostos"`
+			Reservar bool     `json:"reservar"`
+		}{
+			IDPostos: idPostos,
+			Reservar: true,
+		})
+		if erro != nil {
+			fmt.Println("Erro ao codificar JSON:", erro)
+			return
+		}
 
-	req, erro := http.NewRequest(http.MethodPut, "http://localhost:8080/reservar", bytes.NewBuffer(putData))
-	if erro != nil {
-		fmt.Println("erro ao criar requisição:", erro)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
+		req, erro := http.NewRequest(http.MethodPut, "http://localhost:8080/reservar", bytes.NewBuffer(putData))
+		if erro != nil {
+			fmt.Println("erro ao criar requisição:", erro)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{} //envia requisições personalizadas criadas com http.NewRequest
-	resp, erro := client.Do(req) //executa a requisição
-	if erro != nil {
-		fmt.Println("erro ao enviar requisição:", erro)
-		return
-	}
-	defer resp.Body.Close()
+		client := &http.Client{}     //envia requisições personalizadas criadas com http.NewRequest
+		resp, erro := client.Do(req) //executa a requisição
+		if erro != nil {
+			fmt.Println("erro ao enviar requisição:", erro)
+			return
+		}
+		defer resp.Body.Close()
 
-	fmt.Println("Status:", resp.Status)
+		fmt.Println("Status:", resp.Status)
+	} else {
+		putData, erro := json.Marshal(struct {
+			IDPostos []string `json:"idPostos"`
+			Reservar bool     `json:"reservar"`
+		}{
+			IDPostos: idPostos,
+			Reservar: false,
+		})
+		if erro != nil {
+			fmt.Println("Erro ao codificar JSON:", erro)
+			return
+		}
+
+		req, erro := http.NewRequest(http.MethodPut, "http://localhost:8080/reservar", bytes.NewBuffer(putData))
+		if erro != nil {
+			fmt.Println("erro ao criar requisição:", erro)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}     //envia requisições personalizadas criadas com http.NewRequest
+		resp, erro := client.Do(req) //executa a requisição
+		if erro != nil {
+			fmt.Println("erro ao enviar requisição:", erro)
+			return
+		}
+		defer resp.Body.Close()
+
+		fmt.Println("Status:", resp.Status)
+	}
 }
 
 func listarPostos() []modelo.Posto {
@@ -126,7 +165,6 @@ func listarPostos() []modelo.Posto {
 
 func procurarPostosParaReserva(postos []modelo.Posto) {
 	var reserva string
-	var idPostos []string
 
 	fmt.Println("Digite 1 ou pressione Enter para sair")
 	fmt.Println("Digite o ID dos postos que deseja reservar, um de cada vez: ")
@@ -156,7 +194,7 @@ func procurarPostosParaReserva(postos []modelo.Posto) {
 
 	if len(idPostos) > 0 {
 		fmt.Println(idPostos)
-		onSubmit(idPostos)
+		onSubmit(idPostos, true)
 	} else {
 		fmt.Println("Nenhum posto selecionado.")
 	}
@@ -169,6 +207,7 @@ func menu() {
 		fmt.Println("2 - Atualizar posição do veículo")
 		fmt.Println("3 - Consultar postos disponíveis")
 		fmt.Println("4 - Reservar posto")
+		fmt.Println("5 - Finalizar viagem")
 		var opcao int
 		fmt.Print("Escolha uma opção: ")
 		fmt.Scanln(&opcao)
@@ -194,12 +233,23 @@ func menu() {
 		case 3:
 			listarPostos()
 		case 4:
-			postos := listarPostos()
+			if len(idPostos) == 0 || idPostos == nil {
+				postos := listarPostos()
 
-			if len(postos) > 0 {
-				procurarPostosParaReserva(postos)
+				if len(postos) > 0 {
+					procurarPostosParaReserva(postos)
+				} else {
+					fmt.Println("Postos não encontrado.")
+				}
 			} else {
-				fmt.Println("Postos não encontrado.")
+				fmt.Println("Você já possui reservas em andamento. Finalize a viagem para reservar novamente.")
+			}
+		case 5:
+			if len(idPostos) > 0 {
+				onSubmit(idPostos, false)
+				idPostos = []string{}
+			} else {
+				fmt.Println("Você não possui reservas.")
 			}
 		default:
 			fmt.Println("Opção inválida.")
