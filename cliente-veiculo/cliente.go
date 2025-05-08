@@ -79,65 +79,34 @@ func conectarAoBroker() {
 }
 
 func onSubmit(idPostos []string, reservar bool) {
-	if reservar {
-		putData, erro := json.Marshal(struct {
-			IDPostos []string `json:"idPostos"`
-			Reservar bool     `json:"reservar"`
-		}{
-			IDPostos: idPostos,
-			Reservar: true,
-		})
-		if erro != nil {
-			fmt.Println("Erro ao codificar JSON:", erro)
-			return
-		}
-
-		req, erro := http.NewRequest(http.MethodPut, "http://localhost:8080/reservar", bytes.NewBuffer(putData))
-		if erro != nil {
-			fmt.Println("erro ao criar requisição:", erro)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{}     //envia requisições personalizadas criadas com http.NewRequest
-		resp, erro := client.Do(req) //executa a requisição
-		if erro != nil {
-			fmt.Println("erro ao enviar requisição:", erro)
-			return
-		}
-		defer resp.Body.Close()
-
-		fmt.Println("Status:", resp.Status)
-	} else {
-		putData, erro := json.Marshal(struct {
-			IDPostos []string `json:"idPostos"`
-			Reservar bool     `json:"reservar"`
-		}{
-			IDPostos: idPostos,
-			Reservar: false,
-		})
-		if erro != nil {
-			fmt.Println("Erro ao codificar JSON:", erro)
-			return
-		}
-
-		req, erro := http.NewRequest(http.MethodPut, "http://localhost:8080/reservar", bytes.NewBuffer(putData))
-		if erro != nil {
-			fmt.Println("erro ao criar requisição:", erro)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{}     //envia requisições personalizadas criadas com http.NewRequest
-		resp, erro := client.Do(req) //executa a requisição
-		if erro != nil {
-			fmt.Println("erro ao enviar requisição:", erro)
-			return
-		}
-		defer resp.Body.Close()
-
-		fmt.Println("Status:", resp.Status)
+	putData, erro := json.Marshal(struct {
+		IDPostos []string `json:"idPostos"`
+		Reservar bool     `json:"reservar"`
+	}{
+		IDPostos: idPostos,
+		Reservar: reservar,
+	})
+	if erro != nil {
+		fmt.Println("Erro ao codificar JSON:", erro)
+		return
 	}
+
+	req, erro := http.NewRequest(http.MethodPut, endereco+"/reservar", bytes.NewBuffer(putData))
+	if erro != nil {
+		fmt.Println("erro ao criar requisição:", erro)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, erro := client.Do(req)
+	if erro != nil {
+		fmt.Println("erro ao enviar requisição:", erro)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("Status:", resp.Status)
 }
 
 func listarPostos() []modelo.Posto {
@@ -157,7 +126,7 @@ func listarPostos() []modelo.Posto {
 
 	fmt.Printf("\n\nPostos disponíveis:\n")
 	for _, p := range postos {
-		fmt.Printf("- %s (%f, %f)\n", p.ID, p.Latitude, p.Longitude)
+		fmt.Printf("- %s (%f, %f) - Servidor: %s\n", p.ID, p.Latitude, p.Longitude, p.ServidorOrigem)
 	}
 
 	return postos

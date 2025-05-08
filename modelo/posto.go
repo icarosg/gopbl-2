@@ -2,31 +2,46 @@ package modelo
 
 import (
 	"fmt"
+	"time"
 	//"math"
 	//"sort"
 	//"sync"
-	//"time"
 )
 
 type Posto struct {
-	ID         string
-	Latitude   float64
-	Longitude  float64
-	Disponivel bool
+	ID                string    `bson:"id" json:"id"`
+	Latitude          float64   `bson:"latitude" json:"latitude"`
+	Longitude         float64   `bson:"longitude" json:"longitude"`
+	Disponivel        bool      `bson:"disponivel" json:"disponivel"`
+	UltimaAtualizacao time.Time `bson:"ultimaAtualizacao" json:"ultimaAtualizacao"`
+	ServidorOrigem    string    `bson:"servidorOrigem" json:"servidorOrigem"`
 }
 
-func NovoPosto(id string, lat float64, long float64) Posto {
-	fmt.Printf("Posto %s criado na localização (%.6f, %.6f)",
-		id, lat, long)
+func NovoPosto(id string, lat float64, long float64, servidorOrigem string) Posto {
+	fmt.Printf("Posto %s criado na localização (%.6f, %.6f) no servidor %s",
+		id, lat, long, servidorOrigem)
 
 	return Posto{
-		ID:         id,
-		Latitude:   lat,
-		Longitude:  long,
-		Disponivel: true,
+		ID:                id,
+		Latitude:          lat,
+		Longitude:         long,
+		Disponivel:        true,
+		UltimaAtualizacao: time.Now(),
+		ServidorOrigem:    servidorOrigem,
 	}
 }
 
-func (p Posto) String() string {
-	return fmt.Sprintf("Posto id:%s\n Posto localizado em (%.4f, %.4f)\n ", p.ID, p.Latitude, p.Longitude)
+func String(p Posto) string {
+	status := "disponível"
+	if !p.Disponivel {
+		status = "reservado"
+	}
+	return fmt.Sprintf("Posto id:%s\n Posto localizado em (%.4f, %.4f)\n Status: %s\n Última atualização: %s",
+		p.ID, p.Latitude, p.Longitude, status, p.UltimaAtualizacao.Format(time.RFC3339))
+}
+
+// atualiza o status de disponibilidade e o timestamp
+func AtualizarDisponibilidade(p *Posto, disponivel bool) {
+	p.Disponivel = disponivel
+	p.UltimaAtualizacao = time.Now()
 }

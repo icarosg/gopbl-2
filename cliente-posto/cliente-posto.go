@@ -17,14 +17,16 @@ import (
 // 	id        string
 // 	latitude  float64
 // 	longitude float64
+//  servidor  string
 // )
 
 var posto_criado modelo.Posto
+var endereco string
 
 func main() {
-	endereco := selecionarServidorManual()
+	endereco = selecionarServidorManual()
 
-	opts := mqtt.NewClientOptions().AddBroker(endereco)
+	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
 
 	cadastrarPosto()
 	opts.SetClientID(posto_criado.ID)
@@ -35,14 +37,14 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Conectado ao broker MQTT em %s\n", endereco)
+	fmt.Printf("Conectado ao broker MQTT em %s\n", "tcp://localhost:1883")
 
 	// publica atualização
 	for {
 		payload, _ := json.Marshal(posto_criado)
 		token := client.Publish("postos/"+posto_criado.ID, 0, false, payload)
 		token.Wait()
-		fmt.Println("Publicado estado do posto.")
+		//fmt.Println("Publicado estado do posto.")
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -55,9 +57,11 @@ func cadastrarPosto() {
 	// fmt.Scanln(&latitude)
 	// fmt.Print("Digite a longitude do posto: ")
 	// fmt.Scanln(&longitude)
+	// fmt.Print("Digite o nome do servidor de origem: ")
+	// fmt.Scanln(&servidor)
 
-	posto_criado = modelo.NovoPosto("posto1", 15, 20)
-	onSubmit(posto_criado);
+	posto_criado = modelo.NovoPosto("posto2", 15, 20, "22")
+	onSubmit(posto_criado)
 }
 
 func selecionarServidorManual() string {
@@ -67,10 +71,10 @@ func selecionarServidorManual() string {
 	fmt.Println("Conexão com servidor MQTT")
 	fmt.Print("Digite o IP do servidor (ex: 127.0.0.1): ")
 	fmt.Scanln(&ip)
-	fmt.Print("Digite a porta (ex: 1883): ")
+	fmt.Print("Digite a porta (ex: 8080): ")
 	fmt.Scanln(&porta)
 
-	return fmt.Sprintf("tcp://%s:%s", ip, porta)
+	return fmt.Sprintf("http://%s:%s", ip, porta)
 }
 
 func onSubmit(posto modelo.Posto) {
@@ -80,7 +84,7 @@ func onSubmit(posto modelo.Posto) {
 		return
 	}
 
-	resp, err := http.Post("http://localhost:8080/cadastrar", "application/json", bytes.NewBuffer(postData))
+	resp, err := http.Post(endereco+"/cadastrar", "application/json", bytes.NewBuffer(postData))
 	if err != nil {
 		fmt.Println("Erro ao enviar requisição:", err)
 		return
