@@ -18,7 +18,7 @@ var cadastrado bool = false
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 	switch msg.Topic() {
-	case "topic/listar-postos":
+	case "topic/listar-postos-3":
 		postoC := modelo.PostoConsulta{
 			ID:    posto.ID,
 			Posto: posto,
@@ -28,17 +28,17 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 			fmt.Println("erro ao converter posto")
 			return
 		}
-		client.Publish("topic/receber-posto", 0, false, payload)
+		client.Publish("topic/receber-posto-3", 0, false, payload)
 		//token.Wait()
-	case "topic/possivel-reserva":
+	case "topic/possivel-reserva-3":
 		if posto.BombaOcupada {
-			token := client.Publish("topic/possivel-reserva-server", 0, false, false)
+			token := client.Publish("topic/possivel-reserva-3-server", 0, false, false)
 			token.Wait()
 		} else {
-			token := client.Publish("topic/possivel-reserva-server", 0, false, false)
+			token := client.Publish("topic/possivel-reserva-3-server", 0, false, false)
 			token.Wait()
 		}
-	case "topic/reservar-vaga":
+	case "topic/reservar-vaga-3":
 		var veiculo modelo.Veiculo
 		err := json.Unmarshal(msg.Payload(), &veiculo)
 		if err != nil {
@@ -47,7 +47,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		}
 		posto.BombaOcupada = true
 		posto.Fila = veiculo
-	case "topic/liberar-vaga":
+	case "topic/liberar-vaga-3":
 		posto.BombaOcupada = false
 		posto.Fila = modelo.Veiculo{}
 	}
@@ -106,19 +106,19 @@ func sub(client mqtt.Client) {
 	//client.Subscribe("topic/testar", 1, nil)
 	//token.Wait()
 
-	topic := "topic/listar-postos"
+	topic := "topic/listar-postos-3"
 	token := client.Subscribe(topic, 1, nil)
 	token.Wait()
 
-	topic = "topic/possivel-reserva"
+	topic = "topic/possivel-reserva-3"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
-	topic = "topic/reservar-vaga"
+	topic = "topic/reservar-vaga-3"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
-	topic = "topic/liberar-vaga"
+	topic = "topic/liberar-vaga-3"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
@@ -163,7 +163,7 @@ func menu(client mqtt.Client) {
 			}
 			cadastrado = true	 
 			
-			client.Publish("topic/cadastro-posto", 0, false, postoEnviado)
+			client.Publish("topic/cadastro-posto-3", 0, false, postoEnviado)
 		case 2:
 			if !cadastrado {
 				fmt.Println("posto nao cadastrado")

@@ -18,7 +18,7 @@ var cadastrado bool = false
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 	switch msg.Topic() {
-	case "topic/listar-postos":
+	case "topic/listar-postos-2":
 		postoC := modelo.PostoConsulta{
 			ID:    posto.ID,
 			Posto: posto,
@@ -28,17 +28,17 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 			fmt.Println("erro ao converter posto")
 			return
 		}
-		client.Publish("topic/receber-posto", 0, false, payload)
+		client.Publish("topic/receber-posto-2", 0, false, payload)
 		//token.Wait()
-	case "topic/possivel-reserva":
+	case "topic/possivel-reserva-2":
 		if posto.BombaOcupada {
-			token := client.Publish("topic/possivel-reserva-server", 0, false, false)
+			token := client.Publish("topic/possivel-reserva-2-server", 0, false, false)
 			token.Wait()
 		} else {
-			token := client.Publish("topic/possivel-reserva-server", 0, false, false)
+			token := client.Publish("topic/possivel-reserva-2-server", 0, false, false)
 			token.Wait()
 		}
-	case "topic/reservar-vaga":
+	case "topic/reservar-vaga-2":
 		var veiculo modelo.Veiculo
 		err := json.Unmarshal(msg.Payload(), &veiculo)
 		if err != nil {
@@ -47,7 +47,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		}
 		posto.BombaOcupada = true
 		posto.Fila = veiculo
-	case "topic/liberar-vaga":
+	case "topic/liberar-vaga-2":
 		posto.BombaOcupada = false
 		posto.Fila = modelo.Veiculo{}
 	}
@@ -66,12 +66,13 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 
 func main() {
 	var broker = "192.168.0.110" //trocar pelo ip da maquina
-	var port = 1884
+	//var broker = "26.233.72.191"
+	var port = 1883
 	opts := mqtt.NewClientOptions()
 	//opts.AddBroker("tcp://192.168.0.110:1883")
 
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", broker, port))
-	opts.SetClientID("go_mqtt_client_posto_1")
+	opts.SetClientID("go_mqtt_client_posto_2")
 	opts.SetUsername("emqx")
 	opts.SetPassword("public")
 	opts.SetDefaultPublishHandler(messagePubHandler)
@@ -106,19 +107,19 @@ func sub(client mqtt.Client) {
 	//client.Subscribe("topic/testar", 1, nil)
 	//token.Wait()
 
-	topic := "topic/listar-postos"
+	topic := "topic/listar-postos-2"
 	token := client.Subscribe(topic, 1, nil)
 	token.Wait()
 
-	topic = "topic/possivel-reserva"
+	topic = "topic/possivel-reserva-2"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
-	topic = "topic/reservar-vaga"
+	topic = "topic/reservar-vaga-2"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
-	topic = "topic/liberar-vaga"
+	topic = "topic/liberar-vaga-2"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
@@ -156,14 +157,14 @@ func menu(client mqtt.Client) {
 			fmt.Scanln(&long)
 			posto = modelo.NovoPosto(id, lat, long)
 			fmt.Println(posto)
-			postoEnviado,e := json.Marshal(posto)
-			if e != nil{
+			postoEnviado, e := json.Marshal(posto)
+			if e != nil {
 				fmt.Println("erro ao converter posto antes de enviar pro servidor")
 				continue
 			}
-			cadastrado = true	 
-			
-			client.Publish("topic/cadastro-posto", 0, false, postoEnviado)
+			cadastrado = true
+
+			client.Publish("topic/cadastro-posto-2", 0, false, postoEnviado)
 		case 2:
 			if !cadastrado {
 				fmt.Println("posto nao cadastrado")

@@ -34,7 +34,7 @@ var postos_servidor_AL []modelo.Posto
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Received message: from topic: %s\n", msg.Topic())
 	switch msg.Topic() {
-	case "topic/consulta-cliente-1-A":
+	case "topic/consulta-cliente-1-C":
 		postos_servidor_A = make(map[string]modelo.Posto)		
 		err := json.Unmarshal(msg.Payload(), &postos_servidor_AL)
 		if err != nil {
@@ -61,7 +61,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	// 	for _, posto := range postos_servidor_CL {
 	// 		postos_servidor_C[posto.ID] = posto
 	// 	}
-	case "topic/confirmacao-veiculo":
+	case "topic/confirmacao-veiculo-3":
 		confirm = true
 	}
 }
@@ -120,7 +120,7 @@ func sub(client mqtt.Client) {
 	// token := client.Subscribe(topic, 1, nil)
 	//client.Subscribe("topic/testar", 1, nil)
 	//token.Wait()
-	topic := "topic/consulta-cliente-1-A"
+	topic := "topic/consulta-cliente-1-C"
 	token := client.Subscribe(topic, 1, nil)
 	token.Wait()
 
@@ -133,7 +133,7 @@ func sub(client mqtt.Client) {
 	// token.Wait()
 	//fmt.Printf("Subscribed to topic: %s", topic)
 
-	topic = "topic/confirmacao-veiculo"
+	topic = "topic/confirmacao-veiculo-3"
 	token = client.Subscribe(topic, 1, nil)
 	token.Wait()
 
@@ -185,7 +185,7 @@ func menu(client mqtt.Client) {
 			postos_servidor_A = make(map[string]modelo.Posto)
 			// postos_servidor_B = make(map[string]modelo.Posto)
 			// postos_servidor_C = make(map[string]modelo.Posto)
-			token := client.Publish("topic/pedido-consulta-cliente-1-A", 0, false, "postos-server-A")			
+			token := client.Publish("topic/pedido-consulta-cliente-1-C", 0, false, "postos-server-A")			
 			token.Wait()
 			// token = client.Publish("topic/pedido-consulta-cliente-1-B", 0, false, "postos-server-B")
 			// token.Wait()
@@ -316,7 +316,7 @@ func menu(client mqtt.Client) {
 					return
 				}
                 idPostos = []string{}
-				client.Publish("topic/encerrar-viagem", 0,false, payload)
+				client.Publish("topic/encerrar-viagem-3", 0,false, payload)
             } else {
                 fmt.Println("Você não possui reservas.")
             }
@@ -375,7 +375,7 @@ func procurarPostosParaReserva(postos []modelo.Posto, client mqtt.Client) {
 			fmt.Println("Erro ao codificar JSON:", err)
 			return
 		}
-		client.Publish("topic/reqAtomica", 0, false, payload)
+		client.Publish("topic/reqAtomica-3", 0, false, payload)
 	} else {
 		fmt.Println("Nenhum posto selecionado.")
 	}
@@ -385,11 +385,11 @@ func listarPostos(client mqtt.Client){
 	postos_servidor_A = make(map[string]modelo.Posto)
 			// postos_servidor_B = make(map[string]modelo.Posto)
 			// postos_servidor_C = make(map[string]modelo.Posto)
-			token := client.Publish("topic/pedido-consulta-cliente-1-A", 0, false, "postos-server-A")			
-			token.Wait()
-			token = client.Publish("topic/pedido-consulta-cliente-1-B", 0, false, "postos-server-B")
-			token.Wait()
-			token = client.Publish("topic/pedido-consulta-cliente-1-C", 0, false, "postos-server-C")
+			// token := client.Publish("topic/pedido-consulta-cliente-1-A", 0, false, "postos-server-A")			
+			// token.Wait()
+			// token = client.Publish("topic/pedido-consulta-cliente-1-B", 0, false, "postos-server-B")
+			// token.Wait()
+			token := client.Publish("topic/pedido-consulta-cliente-1-C", 0, false, "postos-server-C")
 			token.Wait()
 			
 			fmt.Println("consultando postos de recarga...")
