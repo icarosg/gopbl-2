@@ -49,33 +49,10 @@ func main() {
 	}
 	fmt.Println("Conectado ao MongoDB com sucesso!")
 
-	// sincronizadorMQTT, erro = db.NovoSincronizadorMQTT(
-	// 	dbServer,
-	// 	mqttBroker,
-	// 	nomeServidor,
-	// 	1*time.Minute,
-	// )
-	// if erro != nil {
-	// 	log.Printf("Não foi possível iniciar o sincronizador MQTT: %v", erro)
-	// } else {
-	// 	sincronizadorMQTT.IniciarSincronizacao()
-	// 	fmt.Println("Sincronizador MQTT iniciado com sucesso!")
-	// }
-
-	// // fecha a conexão quando o programa terminar
-	// defer func() {
-	// 	dbServer.Fechar()
-	// 	if sincronizadorMQTT != nil {
-	// 		sincronizadorMQTT.Fechar()
-	// 	}
-	// }()
-
-	// Iniciar conexão MQTT
-	configurarMQTT()
+	configurarMQTT() // inicia conexão MQTT
 
 	router := gin.Default() // cria o servidor Gin
 
-	// registra rota
 	router.GET("/postosDisponiveis", postosDisponiveisHandler)
 	router.POST("/cadastrar", cadastrarPostoHandler)
 	router.PUT("/reservar", editarPostoHandler)
@@ -100,10 +77,24 @@ func configurarMQTT() {
 	}
 	fmt.Println("Conectado ao broker MQTT com sucesso!")
 
-	// Inscrever nos tópicos
+	nomeServidor := "Ipiranga"
+
+	// Inscrever nos tópicos gerais para manter compatibilidade com clientes existentes
 	mqttClient.Subscribe(modelo.TopicPostosDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(modelo.TopicCadastrarPosto, 1, handleCadastrarPosto)
 	mqttClient.Subscribe(modelo.TopicReservarPosto, 1, handleReservarPosto)
+
+	// Inscrever nos tópicos específicos para este servidor
+	topicDisponiveis := modelo.GetTopicServidor(nomeServidor, "disponiveis")
+	topicCadastrar := modelo.GetTopicServidor(nomeServidor, "cadastrar")
+	topicReservar := modelo.GetTopicServidor(nomeServidor, "reservar")
+
+	mqttClient.Subscribe(topicDisponiveis, 1, handleListarPostos)
+	mqttClient.Subscribe(topicCadastrar, 1, handleCadastrarPosto)
+	mqttClient.Subscribe(topicReservar, 1, handleReservarPosto)
+
+	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s\n",
+		topicDisponiveis, topicCadastrar, topicReservar)
 }
 
 func handleListarPostos(client mqtt.Client, msg mqtt.Message) {
@@ -193,7 +184,13 @@ func handleCadastrarPosto(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// garante que o timestamp está atualizado e definir o servidor de origem
+	log.Printf("Recebida solicitação para cadastrar posto: %s no servidor %s", novoPosto.ID, novoPosto.ServidorOrigem)
+
+	// Definir tópico de resposta para este posto/cliente
+	responseTopic := modelo.TopicResposta + "/" + novoPosto.ID
+	log.Printf("Usando tópico de resposta: %s", responseTopic)
+
+	// Garante que o timestamp está atualizado e definir o servidor de origem
 	novoPosto.UltimaAtualizacao = time.Now()
 	novoPosto.ServidorOrigem = dbServer.Nome
 
@@ -204,18 +201,48 @@ func handleCadastrarPosto(client mqtt.Client, msg mqtt.Message) {
 	filter := bson.M{"id": novoPosto.ID}
 	var existente modelo.Posto
 	erro := collection.FindOne(ctx, filter).Decode(&existente) // verifica se já existe um posto com mesmo nome
+
+	// Preparar resposta
+	resposta := struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{}
+
 	if erro == nil {
 		log.Printf("Posto %s já existe", novoPosto.ID)
-		return
+		resposta.Status = "erro"
+		resposta.Message = "Posto já existente"
+	} else {
+		_, erro = collection.InsertOne(ctx, novoPosto)
+		if erro != nil {
+			log.Printf("Erro ao inserir posto: %v", erro)
+			resposta.Status = "erro"
+			resposta.Message = "Erro ao cadastrar posto"
+		} else {
+			log.Printf("Posto %s cadastrado com sucesso", novoPosto.ID)
+			resposta.Status = "sucesso"
+			resposta.Message = "Posto cadastrado com sucesso"
+		}
 	}
 
-	_, erro = collection.InsertOne(ctx, novoPosto)
-	if erro != nil {
-		log.Printf("Erro ao inserir posto: %v", erro)
-		return
-	}
+	// Enviar resposta com QoS 1 para garantir entrega pelo menos uma vez
+	responsePayload, _ := json.Marshal(resposta)
+	log.Printf("Enviando resposta para %s: %s", responseTopic, string(responsePayload))
 
-	log.Printf("Posto %s cadastrado com sucesso", novoPosto.ID)
+	token := mqttClient.Publish(responseTopic, 1, false, responsePayload)
+	if token.WaitTimeout(5*time.Second) && token.Error() != nil {
+		log.Printf("Erro ao enviar resposta: %v", token.Error())
+		// Tentar novamente uma vez
+		token = mqttClient.Publish(responseTopic, 1, false, responsePayload)
+		token.Wait()
+		if token.Error() != nil {
+			log.Printf("Falha na segunda tentativa de enviar resposta: %v", token.Error())
+		} else {
+			log.Printf("Resposta enviada com sucesso na segunda tentativa")
+		}
+	} else {
+		log.Printf("Resposta enviada com sucesso")
+	}
 }
 
 func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {

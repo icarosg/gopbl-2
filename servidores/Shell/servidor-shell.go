@@ -39,7 +39,7 @@ var mqttClient mqtt.Client
 func main() {
 	hostDB := getEnv("DB_HOST", "localhost")
 	portaDB := 27017
-	nomeServidor := "22"
+	nomeServidor := "Shell"
 	//mqttBroker := getEnv("MQTT_BROKER", "tcp://localhost:1883")
 
 	var erro error
@@ -57,13 +57,13 @@ func main() {
 	router.POST("/cadastrar", cadastrarPostoHandler)
 	router.PUT("/reservar", editarPostoHandler)
 
-	router.Run(":8082")
+	router.Run(":8080")
 }
 
 func configurarMQTT() {
 	// Configurar cliente MQTT
 	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
-	opts.SetClientID("servidor-22-mqtt")
+	opts.SetClientID("servidor-shell-mqtt")
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetPingTimeout(1 * time.Second)
 	opts.SetCleanSession(false)
@@ -77,7 +77,7 @@ func configurarMQTT() {
 	}
 	fmt.Println("Conectado ao broker MQTT com sucesso!")
 
-	nomeServidor := "22"
+	nomeServidor := "Shell"
 
 	// Inscrever nos tópicos gerais para manter compatibilidade com clientes existentes
 	mqttClient.Subscribe(modelo.TopicPostosDisponiveis, 1, handleListarPostos)
@@ -141,7 +141,7 @@ func handleListarPostos(client mqtt.Client, msg mqtt.Message) {
 	todosPostos = append(todosPostos, postosLocais...)
 
 	for _, servidor := range servidores {
-		if servidor == "http://localhost:8082" {
+		if servidor == "http://localhost:8080" {
 			continue
 		}
 
@@ -270,7 +270,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 	// consulta disponibilidade em outros servidores
 	for _, servidor := range servidores {
-		if servidor == "http://localhost:8082" {
+		if servidor == "http://localhost:8080" {
 			continue
 		}
 
@@ -323,7 +323,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 		//atualiza nos outros servidores
 		for _, servidor := range servidores {
-			if servidor == "http://localhost:8082" {
+			if servidor == "http://localhost:8080" {
 				continue
 			}
 
@@ -374,7 +374,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 		//atualiza nos outros servidores
 		for _, servidor := range servidores {
-			if servidor == "http://localhost:8082" {
+			if servidor == "http://localhost:8080" {
 				continue
 			}
 
@@ -426,7 +426,7 @@ func postosDisponiveisHandler(c *gin.Context) {
 		var todosPostos []modelo.Posto
 
 		for _, servidor := range servidores {
-			if servidor == "http://localhost:8082" {
+			if servidor == "http://localhost:8080" {
 				continue
 			}
 
@@ -578,7 +578,7 @@ func editarPostoHandler(c *gin.Context) {
 
 	// consulta disponibilidade em outros servidores
 	for _, servidor := range servidores {
-		if servidor == "http://localhost:8082" {
+		if servidor == "http://localhost:8080" {
 			continue
 		}
 
@@ -632,7 +632,7 @@ func editarPostoHandler(c *gin.Context) {
 		//atualiza nos outros servidores
 		if c.Query("consultarOutrosServidores") != "false" {
 			for _, servidor := range servidores {
-				if servidor == "http://localhost:8082" {
+				if servidor == "http://localhost:8080" {
 					continue
 				}
 
@@ -694,7 +694,7 @@ func editarPostoHandler(c *gin.Context) {
 		//atualiza nos outros servidores
 		if c.Query("consultarOutrosServidores") != "false" {
 			for _, servidor := range servidores {
-				if servidor == "http://localhost:8082" {
+				if servidor == "http://localhost:8080" {
 					continue
 				}
 

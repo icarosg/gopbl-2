@@ -13,11 +13,12 @@ import (
 
 var veiculo modelo.Veiculo
 var cadastrado bool = false
-var idPostos []string // Restaurado para manter reservas
+var idPostos []string
 var client mqtt.Client
 var opts *mqtt.ClientOptions
 var responseTopic string
-var listarMutex sync.Mutex // Mutex para evitar chamadas concorrentes à função listarPostos
+var listarMutex sync.Mutex   // mutex para evitar chamadas concorrentes à função listarPostos
+var servidorPreferido string // armazena o servidor preferido do cliente
 
 func main() {
 	menu()
@@ -40,14 +41,39 @@ func cadastrarVeiculo() {
 	cadastrado = true
 	fmt.Println("Veículo cadastrado:", veiculo)
 
+	selecionarServidorPreferido() // solicitar o servidoro cliente quer fazer parte
+
 	conectarAoBroker()
+}
+
+func selecionarServidorPreferido() {
+	fmt.Println("\nSelecione o servidor preferido:")
+	fmt.Println("1 - Servidor Ipiranga")
+	fmt.Println("2 - Servidor 22")
+	fmt.Println("3 - Servidor Shell")
+	var opcao int
+	fmt.Print("Escolha uma opção: ")
+	fmt.Scanln(&opcao)
+
+	switch opcao {
+	case 1:
+		servidorPreferido = "Ipiranga"
+	case 2:
+		servidorPreferido = "22"
+	case 3:
+		servidorPreferido = "Shell"
+	default:
+		fmt.Println("Opção inválida. Utilizando Ipiranga como padrão.")
+		servidorPreferido = "Ipiranga"
+	}
+	fmt.Printf("Servidor preferido selecionado: %s\n", servidorPreferido)
 }
 
 func conectarAoBroker() {
 	if veiculo.ID != "" {
 		opts = mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
 		opts.SetClientID(veiculo.ID)
-		opts.SetCleanSession(true) // Sempre começar com uma sessão limpa
+		opts.SetCleanSession(true) // sempre começar com uma sessão limpa
 		opts.SetAutoReconnect(true)
 
 		client = mqtt.NewClient(opts)
@@ -56,7 +82,7 @@ func conectarAoBroker() {
 			return
 		}
 
-		// Cria um tópico de resposta único para este cliente
+		// cria um tópico de resposta único para este cliente
 		responseTopic = modelo.TopicResposta + "/" + veiculo.ID
 
 		fmt.Printf("Conectado ao broker MQTT em tcp://localhost:1883\n")
@@ -64,6 +90,12 @@ func conectarAoBroker() {
 }
 
 func onSubmit(idPostos []string, reservar bool) {
+	// se temos servidor preferido, usar o tópico específico
+	topic := modelo.TopicReservarPosto
+	if servidorPreferido != "" {
+		topic = modelo.GetTopicServidor(servidorPreferido, "reservar")
+	}
+
 	data := struct {
 		IDPostos []string `json:"idPostos"`
 		Reservar bool     `json:"reservar"`
@@ -80,18 +112,18 @@ func onSubmit(idPostos []string, reservar bool) {
 		return
 	}
 
-	token := client.Publish(modelo.TopicReservarPosto, 1, false, payload)
+	token := client.Publish(topic, 1, false, payload)
 	token.Wait()
 	if token.Error() != nil {
 		fmt.Println("Erro ao publicar mensagem:", token.Error())
 		return
 	}
 
-	fmt.Println("Solicitação de reserva enviada")
+	fmt.Println("Solicitação de reserva enviada para o servidor", servidorPreferido)
 }
 
 func listarPostos() []modelo.Posto {
-	// Usar mutex para garantir apenas uma operação por vez
+	// usar mutex para garantir apenas uma operação por vez
 	listarMutex.Lock()
 	defer listarMutex.Unlock()
 
@@ -99,7 +131,7 @@ func listarPostos() []modelo.Posto {
 	done := make(chan bool, 1) // Buffer de 1 para evitar goroutine leak
 	timeout := time.After(10 * time.Second)
 
-	// Definir um callback de única vez que se auto-cancela após ser chamado
+	// define um callback de única vez que se auto-cancela após ser chamado
 	callback := func(client mqtt.Client, msg mqtt.Message) {
 		var result []modelo.Posto
 		if err := json.Unmarshal(msg.Payload(), &result); err != nil {
@@ -108,30 +140,34 @@ func listarPostos() []modelo.Posto {
 			postos = result
 		}
 
-		// Enviar sinal no canal done
+		// envia sinal no canal done
 		select {
 		case done <- true:
-			// Sinal enviado com sucesso
+			// sinal enviado com sucesso
 		default:
-			// Canal já fechado ou recebeu um sinal, ignorar
+			// canal já fechado ou recebeu um sinal, ignorar
 		}
 	}
 
-	// Primeiro, cancelar qualquer inscrição anterior
+	// primeiro, cancela qualquer inscrição anterior
 	if token := client.Unsubscribe(responseTopic); token != nil {
 		token.Wait()
-		// Adicionando uma pequena pausa para garantir que a inscrição anterior foi cancelada
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Inscrever-se no tópico de resposta
 	token := client.Subscribe(responseTopic, 1, callback)
 	if token.Wait() && token.Error() != nil {
 		fmt.Println("Erro ao subscrever:", token.Error())
 		return []modelo.Posto{}
 	}
 
-	// Preparar a solicitação com ID do cliente
+	// determina o tópico para publicar
+	topic := modelo.TopicPostosDisponiveis
+	if servidorPreferido != "" {
+		topic = modelo.GetTopicServidor(servidorPreferido, "disponiveis")
+	}
+
+	// preparar a solicitação com ID do cliente
 	requestData := struct {
 		ClientID string `json:"clientId"`
 	}{
@@ -141,14 +177,16 @@ func listarPostos() []modelo.Posto {
 	requestPayload, _ := json.Marshal(requestData)
 
 	// Publicar a solicitação
-	token = client.Publish(modelo.TopicPostosDisponiveis, 1, false, requestPayload)
+	token = client.Publish(topic, 1, false, requestPayload)
 	if token.Wait() && token.Error() != nil {
 		fmt.Println("Erro ao enviar solicitação:", token.Error())
 		client.Unsubscribe(responseTopic)
 		return []modelo.Posto{}
 	}
 
-	// Aguardar a resposta ou timeout
+	fmt.Printf("Solicitação enviada para o servidor %s\n", servidorPreferido)
+
+	// aguarda a resposta ou timeout
 	select {
 	case <-done:
 		fmt.Println("Resposta recebida")
@@ -156,7 +194,7 @@ func listarPostos() []modelo.Posto {
 		fmt.Println("Tempo esgotado aguardando resposta")
 	}
 
-	// Tentar cancelar a inscrição, mas não bloquear se falhar
+	// tenta cancelar a inscrição, mas não bloquear se falhar
 	go func() {
 		token := client.Unsubscribe(responseTopic)
 		token.Wait()
@@ -181,7 +219,7 @@ func procurarPostosParaReserva(postos []modelo.Posto) {
 	fmt.Println("Digite 1 ou pressione Enter para sair")
 	fmt.Println("Digite o ID dos postos que deseja reservar, um de cada vez: ")
 
-	idPostos = []string{} // Limpa lista anterior
+	idPostos = []string{} // limpa a lista anterior
 	for {
 		reserva = "1"
 		fmt.Scanln(&reserva)
@@ -207,10 +245,33 @@ func procurarPostosParaReserva(postos []modelo.Posto) {
 
 	if len(idPostos) > 0 {
 		fmt.Println(idPostos)
-		onSubmit(idPostos, true)
+		postosAtuais := listarPostos()
+		concluirReserva := todosPostosPresentes(idPostos, postosAtuais) //verifica se todos os postos ainda estão como não reservados
+		if concluirReserva {
+			onSubmit(idPostos, true)
+		} else {
+			fmt.Printf("\n\nOs postos foram reservados por outro cliente. Tente novamente.\n\n")
+			idPostos = []string{}
+		}
 	} else {
 		fmt.Println("Nenhum posto selecionado.")
 	}
+}
+
+func todosPostosPresentes(idPostos []string, postosAtuais []modelo.Posto) bool {
+	dicionarioPostosAtuais := make(map[string]bool)
+	for _, p := range postosAtuais {
+		dicionarioPostosAtuais[p.ID] = true
+	}
+
+	// verifica se todos os IDs de idPostos estão no dicionario
+	for _, id := range idPostos {
+		if !dicionarioPostosAtuais[id] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func menu() {
@@ -221,7 +282,8 @@ func menu() {
 		fmt.Println("3 - Consultar postos disponíveis")
 		fmt.Println("4 - Reservar posto")
 		fmt.Println("5 - Finalizar viagem")
-		fmt.Println("6 - Sair")
+		fmt.Println("6 - Alterar servidor preferido")
+		fmt.Println("7 - Sair")
 		var opcao int
 		fmt.Print("Escolha uma opção: ")
 		fmt.Scanln(&opcao)
@@ -266,6 +328,8 @@ func menu() {
 				fmt.Println("Você não possui reservas.")
 			}
 		case 6:
+			selecionarServidorPreferido()
+		case 7:
 			if client != nil && client.IsConnected() {
 				client.Disconnect(250)
 			}
