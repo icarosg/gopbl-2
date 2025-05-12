@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:4.4
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - mqtt-net
+
+  servidor-mqtt:
+    build:
+      context: .
+      dockerfile: Dockerfile-servidor
+    ports:
+      - "1884:1883"
+      - "8082:8082"
+    environment:
+      - DB_HOST=mongodb
+    networks:
+      - mqtt-net
+    container_name: servidor-mqtt
+    depends_on:
+      - mongodb
+
+networks:
+  mqtt-net:
+    driver: bridge
+
+volumes:
+  mongodb_data:
