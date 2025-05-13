@@ -17,17 +17,6 @@ import (
 var posto_criado modelo.Posto
 var client mqtt.Client
 var cadastroConcluido chan bool = make(chan bool, 1)
-// var servers = []string{"Ipiranga", "22", "Shell"}
-// var ipirangaCit = []string{"Feira de Santana", "São Gonçalo", "Serrinha"}
-// var S22Cit = []string{"Caruaru", "Petrolina", "Recife"}
-// var shellCit = []string{"Chapecó", "Florianópolis", "Joinville"}
-// var cidades = []string{"Feira de Santana", "São Gonçalo", "Serrinha", "Caruaru", "Petrolina", "Recife", "Chapecó", "Florianópolis", "Joinville"}
-// // Configuração de callbacks padrão para monitorar a conexão
-
-// var rotas = make(map[string][]modelo.Posto)
-// rotas["Ipiranga"] = []modelo.Posto{
-// 	{modelo.NovoPosto("IP-FSA", -12.345, -38.1234, "Ipiranga", "Feira de Santana")},
-// }
 
 // idEnv := os.Getenv("POSTO_ID")
 // latEnv, _ := strconv.ParseFloat(os.Getenv("POSTO_LAT"), 64)

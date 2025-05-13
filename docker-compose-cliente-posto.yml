@@ -10,9 +10,9 @@ services:
     networks:
       - mqtt-net
     environment:
-      - MQTT_BROKER=tcp://172.16.103.11:1884  # Substitua IP_DO_SERVIDOR pelo IP real
+      - MQTT_BROKER=tcp://172.16.201.2:1884  # Substitua IP_DO_SERVIDOR pelo IP real
     container_name: cliente-posto
 
-networks:
-  mqtt-net:
-    driver: bridge
+# networks:
+#   mqtt-net:
+#     driver: bridge

@@ -18,8 +18,8 @@ services:
       - "27017:27017"
     # volumes:
       # - mongodb_data:/data/db
-    networks:
-      - mqtt-net
+    # networks:
+    #   - mqtt-net
 
   servidor-mqtt-shell:
     build:
@@ -29,16 +29,16 @@ services:
       # - "1884:1884"
       - "8085:8085"
     environment:
-      - DB_HOST=mongodb
-    networks:
-      - mqtt-net
+      - DB_HOST=mongodb://172.16.201.2:27017
+    # networks:
+    #   - mqtt-net
     container_name: servidor-mqtt-shell
     depends_on:
       - mongodb
 
-networks:
-  mqtt-net:
-    driver: bridge
+# networks:
+#   mqtt-net:
+#     driver: bridge
 
 # volumes:
 #   mongodb_data:

@@ -29,7 +29,7 @@ services:
       - "1884:1884"
       - "8084:8084"
     environment:
-      - DB_HOST=mongodb://172.16.103.13:27017
+      - DB_HOST=mongodb://172.16.201.2:27017
     # networks:
     #   - mqtt-net
     container_name: servidor-mqtt-ipiranga

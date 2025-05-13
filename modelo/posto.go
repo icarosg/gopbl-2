@@ -38,8 +38,8 @@ func String(p Posto) string {
 	if !p.Disponivel {
 		status = "reservado"
 	}
-	return fmt.Sprintf("Posto id:%s\n Posto localizado em (%.4f, %.4f)\n Status: %s\n Última atualização: %s",
-		p.ID, p.Latitude, p.Longitude, status, p.UltimaAtualizacao.Format(time.RFC3339))
+	return fmt.Sprintf("Posto id:%s\n Cidade: %s\n Posto localizado em (%.4f, %.4f)\n Status: %s\n Última atualização: %s",
+		p.ID, p.Cidade, p.Latitude, p.Longitude, status, p.UltimaAtualizacao.Format(time.RFC3339))
 }
 
 // atualiza o status de disponibilidade e o timestamp

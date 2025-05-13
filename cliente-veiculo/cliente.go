@@ -204,48 +204,112 @@ func listarPostos() []modelo.Posto {
 		token := client.Unsubscribe(responseTopic)
 		token.Wait()
 	}()
-
+	rotasGeradas := montarRotas(postos)
 	// Exibir os postos
-	if len(postos) > 0 {
-		fmt.Printf("\n\nPostos disponíveis:\n")
-		for _, p := range postos {
-			fmt.Printf("- %s (%f, %f) - Servidor: %s\n - Cidade: %s", p.ID, p.Latitude, p.Longitude, p.ServidorOrigem, p.Cidade)
+	if len(rotasGeradas) > 0 {
+		fmt.Printf("\n\nRotas disponíveis:\n")
+		for id, rota := range rotasGeradas {
+			fmt.Printf("Rota %d: %v\n", id, rota)
 		}
 	} else {
-		fmt.Println("Nenhum posto disponível encontrado")
+		fmt.Println("Nenhuma rota disponível encontrada")
 	}
 
 	return postos
 }
 
-func procurarPostosParaReserva(postos []modelo.Posto) {
-	var reserva string
+func montarRotas(postos []modelo.Posto) map[int][]modelo.Posto {
+	var postosFSA []modelo.Posto
+	var postosSonga []modelo.Posto
+	var postosSerrinha []modelo.Posto
+	var rotas = make(map[int][]modelo.Posto)
+	var quantidadeRotas int = 0
 
-	fmt.Println("Digite 1 ou pressione Enter para sair")
-	fmt.Println("Digite o ID dos postos que deseja reservar, um de cada vez: ")
-
-	idPostos = []string{} // limpa a lista anterior
-	for {
-		reserva = "1"
-		fmt.Scanln(&reserva)
-
-		if reserva == "1" || reserva == "" {
-			break
+	for _, posto := range postos {
+		switch posto.Cidade {
+		case "Feira de Santana":
+			postosFSA = append(postosFSA, posto)
+		case "Serrinha":
+			postosSerrinha = append(postosSerrinha, posto)
+		case "São Gonçalo":
+			postosSonga = append(postosSonga, posto)
 		}
+	}
 
-		encontrado := false
-		for _, p := range postos {
-			if p.ID == reserva {
-				idPostos = append(idPostos, p.ID)
-				encontrado = true
-				fmt.Println("Posto adicionado!")
-				break
+	var todosPostos []modelo.Posto
+	todosPostos = append(todosPostos, postosFSA...)
+	todosPostos = append(todosPostos, postosSonga...)
+	todosPostos = append(todosPostos, postosSerrinha...)
+
+	// Rotas com 1 posto
+	for _, p := range todosPostos {
+		rotas[quantidadeRotas] = []modelo.Posto{p}
+		quantidadeRotas++
+	}
+
+	// Rotas com 2 postos (ordem importa, cidades diferentes)
+	for i := 0; i < len(todosPostos); i++ {
+		for j := 0; j < len(todosPostos); j++ {
+			if i != j && todosPostos[i].Cidade != todosPostos[j].Cidade {
+				rotas[quantidadeRotas] = []modelo.Posto{todosPostos[i], todosPostos[j]}
+				quantidadeRotas++
 			}
 		}
+	}
 
-		if !encontrado {
-			fmt.Println("Posto não encontrado.")
+	// Rotas com 3 postos (ordem importa, cidades diferentes)
+	for i := 0; i < len(todosPostos); i++ {
+		for j := 0; j < len(todosPostos); j++ {
+			for k := 0; k < len(todosPostos); k++ {
+				if i != j && i != k && j != k {
+					// Verifica se as 3 cidades são distintas
+					ci := todosPostos[i].Cidade
+					cj := todosPostos[j].Cidade
+					ck := todosPostos[k].Cidade
+					if ci != cj && ci != ck && cj != ck {
+						rotas[quantidadeRotas] = []modelo.Posto{todosPostos[i], todosPostos[j], todosPostos[k]}
+						quantidadeRotas++
+					}
+				}
+			}
 		}
+	}
+
+	return rotas
+}
+
+
+
+
+
+func procurarPostosParaReserva(rotas map[int][]modelo.Posto) {
+	var escolha int
+	fmt.Println("\n--- Rotas Disponíveis ---")
+	for idx, rota := range rotas {
+		fmt.Printf("Rota %d: ", idx)
+		for _, posto := range rota {
+			fmt.Printf("%s ", posto.ID)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("\nDigite o número da rota que deseja reservar, ou -1 para sair:")
+	fmt.Scanln(&escolha)
+
+	if escolha == -1 {
+		fmt.Println("Operação cancelada.")
+		return
+	}
+
+	rotaEscolhida, existe := rotas[escolha]
+	if !existe {
+		fmt.Println("Rota inválida.")
+		return
+	}
+	idPostos = []string{} // limpa a lista anterior
+	//var idPostos []string
+	for _, p := range rotaEscolhida {
+		idPostos = append(idPostos, p.ID)
 	}
 
 	if len(idPostos) > 0 {
@@ -316,9 +380,10 @@ func menu() {
 		case 4:
 			if len(idPostos) == 0 || idPostos == nil {
 				postos := listarPostos()
-
+				rotas := montarRotas(postos)
 				if len(postos) > 0 {
-					procurarPostosParaReserva(postos)
+					//procurarPostosParaReserva(postos)
+					procurarPostosParaReserva(rotas)
 				} else {
 					fmt.Println("Postos não encontrado.")
 				}

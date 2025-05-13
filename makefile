@@ -21,13 +21,21 @@ broker:
 clean:
 	docker rm -f car-client station-client mosquitto 2>/dev/null || true
 
+iniciarIpiranga:
+	docker-compose -f docker-compose-servidor-ipiranga.yml up --build
+
+iniciar22:
+	docker-compose -f docker-compose-servidor.yml up --build
+
+iniciarShell:
+	docker-compose -f docker-compose-servidor-shell.yml up --build
 
 ipiranga-1:
 	docker build -t cliente-posto-ipiranga-1 -f Dockerfile-cliente-posto .
 	docker run -it \
 		--rm \
 		--name cliente-posto-ipiranga-1 \
-		-e POSTO_ID = ipiranga-fsa \
+		-e POSTO_ID=ipiranga-fsa \
 		-e POSTO_LAT=-12.345 \
 		-e POSTO_LONG=-38.1234 \
 		-e POSTO_SERVIDOR=Ipiranga \
@@ -39,7 +47,7 @@ ipiranga-2:
 	docker run -it \
 		--rm \
 		--name cliente-posto-ipiranga-2 \
-		-e POSTO_ID = ipiranga-songa \
+		-e POSTO_ID=ipiranga-songa \
 		-e POSTO_LAT=-22.345 \
 		-e POSTO_LONG=-48.1234 \
 		-e POSTO_SERVIDOR=Ipiranga \
@@ -51,7 +59,7 @@ ipiranga-3:
 	docker run -it \
 		--rm \
 		--name cliente-posto-ipiranga-3 \
-		-e POSTO_ID = ipiranga-serrinha \
+		-e POSTO_ID=ipiranga-serrinha \
 		-e POSTO_LAT=-32.345 \
 		-e POSTO_LONG=-58.1234 \
 		-e POSTO_SERVIDOR=Ipiranga \
@@ -63,7 +71,7 @@ server22-1:
 	docker run -it \
 		--rm \
 		--name cliente-posto-server22-1 \
-		-e POSTO_ID = server22-fsa \
+		-e POSTO_ID=server22-fsa \
 		-e POSTO_LAT=30.108 \
 		-e POSTO_LONG=80.324 \
 		-e POSTO_SERVIDOR=22 \
@@ -75,7 +83,7 @@ server22-2:
 	docker run -it \
 		--rm \
 		--name cliente-posto-server22-2 \
-		-e POSTO_ID = server22-songa \
+		-e POSTO_ID=server22-songa \
 		-e POSTO_LAT=50.108 \
 		-e POSTO_LONG=100.324 \
 		-e POSTO_SERVIDOR=22 \
@@ -87,7 +95,7 @@ server22-3:
 	docker run -it \
 		--rm \
 		--name cliente-posto-server22-3 \
-		-e POSTO_ID = server22-serrinha \
+		-e POSTO_ID=server22-serrinha \
 		-e POSTO_LAT=80.108 \
 		-e POSTO_LONG=130.324 \
 		-e POSTO_SERVIDOR=22 \
@@ -99,7 +107,7 @@ shell-1:
 	docker run -it \
 		--rm \
 		--name cliente-posto-shell-1 \
-		-e POSTO_ID = shell-fsa \
+		-e POSTO_ID=shell-fsa \
 		-e POSTO_LAT=-80.108 \
 		-e POSTO_LONG=-130.324 \
 		-e POSTO_SERVIDOR=Shell \
@@ -111,7 +119,7 @@ shell-2:
 	docker run -it \
 		--rm \
 		--name cliente-posto-shell-2 \
-		-e POSTO_ID = shell-songa \
+		-e POSTO_ID=shell-songa \
 		-e POSTO_LAT=-150.108 \
 		-e POSTO_LONG=-150.324 \
 		-e POSTO_SERVIDOR=Shell \
@@ -123,7 +131,7 @@ shell-3:
 	docker run -it \
 		--rm \
 		--name cliente-posto-shell-3 \
-		-e POSTO_ID = shell-serrinha \
+		-e POSTO_ID=shell-serrinha \
 		-e POSTO_LAT=150.108 \
 		-e POSTO_LONG=150.324 \
 		-e POSTO_SERVIDOR=Shell \
