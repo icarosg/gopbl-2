@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    ports:
+      - 1883:1883 # MQTT port
+      - 9001:9001 # WebSocket port (optional)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    networks:
+      - app-net
+
+  apppub:
+    build:
+      context: ./AppPub
+      target: final
+    container_name: apppub
+    depends_on:
+      - mosquitto
+    networks:
+      - app-net
+    ports:
+      - 8080:8080
+
+  appsub:
+    build:
+      context: ./AppSub
+      target: final
+    container_name: appsub
+    depends_on:
+      - mosquitto
+    networks:
+      - app-net
+    ports:
+      - 8081:8080
+
+networks:
+  app-net:
+    driver: bridge

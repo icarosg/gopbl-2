@@ -1,0 +1,18 @@
+FROM golang:1.23
+
+WORKDIR /app
+
+# Copiar o go.mod e go.sum
+COPY go.mod go.sum ./
+
+# Download das dependências
+RUN go mod download
+
+# Copiar o resto do código
+COPY . .
+
+# Expor a porta MQTT
+EXPOSE 1884
+
+# Executar o servidor
+CMD ["go", "run", "./servidores/servidor-22/servidor-22.go"]
