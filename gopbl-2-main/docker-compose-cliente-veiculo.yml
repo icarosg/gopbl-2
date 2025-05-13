@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  cliente-veiculo:
+    build:
+      context: .
+      dockerfile: Dockerfile-cliente-veiculo
+    stdin_open: true
+    tty: true
+    networks:
+      - mqtt-net
+    environment:
+      - MQTT_BROKER=tcp://172.16.201.2:1884  # Substitua IP_DO_SERVIDOR pelo IP real
+    container_name: cliente-veiculo
+
+# networks:
+#   mqtt-net:
+#     driver: bridge
