@@ -42,7 +42,7 @@ func main() {
 	//opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
 	brokerURL := os.Getenv("MQTT_BROKER")
 	if brokerURL == "" {
-		brokerURL = "tcp://172.16.103.11:1884"
+		brokerURL = "tcp://172.18.0.1:1884"
 	}
 	opts := mqtt.NewClientOptions().AddBroker(brokerURL)
 	//cadastrarPosto()
@@ -66,7 +66,7 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Conectado ao broker MQTT em %s\n", "tcp://172.16.103.11:1884")
+	fmt.Printf("Conectado ao broker MQTT em %s\n", "tcp://172.18.0.1:1884")
 	fmt.Printf("Usando ID de cliente: %s\n", clientID)
 
 	// Inscrever no tópico de resposta para verificar confirmação

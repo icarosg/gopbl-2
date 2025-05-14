@@ -15,8 +15,8 @@ servidor-22:
 	docker run -it --rm --name servidor-22 --network app-net -e PORT=$(PORT) -p $(PORT):8080 servidor-22
 
 broker:
-	docker build -t mosquittoBroker -f broker/Dockerfile broker/
-	docker run  --rm --name mosquittoBroker -p 1884:1884 -p 9001:9001 mosquittoBroker
+	docker build -t mosquittobroker -f broker/Dockerfile broker/
+	docker run  --rm --name mosquittobroker -p 1884:1884 -p 9001:9001 mosquittobroker
 
 clean:
 	docker rm -f car-client station-client mosquitto 2>/dev/null || true
@@ -29,6 +29,10 @@ iniciar22:
 
 iniciarShell:
 	docker-compose -f docker-compose-servidor-shell.yml up --build
+
+cliente-1:
+	docker-compose -f docker-compose-cliente-veiculo.yml up --build
+	docker attach cliente-veiculo
 
 ipiranga-1:
 	docker build -t cliente-posto-ipiranga-1 -f Dockerfile-cliente-posto .

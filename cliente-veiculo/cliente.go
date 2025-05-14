@@ -71,10 +71,10 @@ func selecionarServidorPreferido() {
 //172.16.103.11
 func conectarAoBroker() {
 	if veiculo.ID != "" {
-		// opts = mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
+		// opts = mqtt.NewClientOptions().AddBroker("tcp://172.18.0.1:1883")
 		brokerURL := os.Getenv("MQTT_BROKER")
 		if brokerURL == "" {
-			brokerURL = "tcp://localhost:8083"
+			brokerURL = "tcp://172.18.0.1:8083"
 		}
 		opts = mqtt.NewClientOptions().AddBroker(brokerURL)
 		opts.SetClientID(veiculo.ID)
@@ -90,15 +90,49 @@ func conectarAoBroker() {
 		// cria um tópico de resposta único para este cliente
 		responseTopic = modelo.TopicResposta + "/" + veiculo.ID
 
-		fmt.Printf("Conectado ao broker MQTT em tcp://localhost:1883\n")
+		fmt.Printf("Conectado ao broker MQTT em tcp://172.18.0.1:1883\n")
 	}
 }
 
-func onSubmit(idPostos []string, reservar bool) {
+func onSubmit(reservar bool) {
 	// se temos servidor preferido, usar o tópico específico
 	topic := modelo.TopicReservarPosto
 	if servidorPreferido != "" {
 		topic = modelo.GetTopicServidor(servidorPreferido, "reservar")
+	}
+
+	done := make(chan bool, 1) // Buffer de 1 para evitar goroutine leak
+	timeout := time.After(10 * time.Second)
+
+	// define um callback de única vez que se auto-cancela após ser chamado
+	reservaFalhou := false
+	callback := func(client mqtt.Client, msg mqtt.Message) {
+		var resultReservaFalhou bool
+		if err := json.Unmarshal(msg.Payload(), &resultReservaFalhou); err != nil {
+			fmt.Println("Erro ao decodificar resposta:", err)
+		} else {
+			reservaFalhou = resultReservaFalhou
+		}
+
+		// envia sinal no canal done
+		select {
+		case done <- true:
+			// sinal enviado com sucesso
+		default:
+			// canal já fechado ou recebeu um sinal, ignorar
+		}
+	}
+
+	// primeiro, cancela qualquer inscrição anterior
+	if token := client.Unsubscribe(responseTopic); token != nil {
+		token.Wait()
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	token := client.Subscribe(responseTopic, 1, callback)
+	if token.Wait() && token.Error() != nil {
+		fmt.Println("Erro ao subscrever:", token.Error())
+		return
 	}
 
 	data := struct {
@@ -117,7 +151,7 @@ func onSubmit(idPostos []string, reservar bool) {
 		return
 	}
 
-	token := client.Publish(topic, 1, false, payload)
+	token = client.Publish(topic, 1, false, payload)
 	token.Wait()
 	if token.Error() != nil {
 		fmt.Println("Erro ao publicar mensagem:", token.Error())
@@ -125,6 +159,25 @@ func onSubmit(idPostos []string, reservar bool) {
 	}
 
 	fmt.Println("Solicitação de reserva enviada para o servidor", servidorPreferido)
+
+	// aguarda a resposta ou timeout
+	select {
+	case <-done:
+		fmt.Println("Resposta recebida")
+	case <-timeout:
+		fmt.Println("Tempo esgotado aguardando resposta")
+	}
+
+	// tenta cancelar a inscrição, mas não bloquear se falhar
+	go func() {
+		token := client.Unsubscribe(responseTopic)
+		token.Wait()
+	}()
+
+	if reservaFalhou {
+		fmt.Println("A reserva falhou!")
+		idPostos = []string{}
+	}
 }
 
 func listarPostos() []modelo.Posto {
@@ -314,10 +367,10 @@ func procurarPostosParaReserva(rotas map[int][]modelo.Posto) {
 
 	if len(idPostos) > 0 {
 		fmt.Println(idPostos)
-		postosAtuais := listarPostos()
-		concluirReserva := todosPostosPresentes(idPostos, postosAtuais) //verifica se todos os postos ainda estão como não reservados
+		//postosAtuais := listarPostos()
+		concluirReserva := true //verifica se todos os postos ainda estão como não reservados
 		if concluirReserva {
-			onSubmit(idPostos, true)
+			onSubmit(true)
 		} else {
 			fmt.Printf("\n\nOs postos foram reservados por outro cliente. Tente novamente.\n\n")
 			idPostos = []string{}
@@ -392,7 +445,7 @@ func menu() {
 			}
 		case 5:
 			if len(idPostos) > 0 {
-				onSubmit(idPostos, false)
+				onSubmit(false)
 				idPostos = []string{}
 			} else {
 				fmt.Println("Você não possui reservas.")

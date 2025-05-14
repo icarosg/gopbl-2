@@ -27,9 +27,9 @@ import (
 )
 
 var servidores = []string{
-	"http://172.16.103.11:8083", //22
-	"http://172.16.103.11:8085", //shell
-	"http://172.16.103.11:8084", //ipiranga
+	"http://172.18.0.1:8083", //22
+	"http://172.18.0.1:8085", //shell
+	"http://172.18.0.1:8084", //ipiranga
 }
 
 var dbServer *db.ConexaoServidorDB
@@ -40,10 +40,10 @@ func main() {
 	//hostDB := getEnv("DB_HOST", "172.16.103.13")
 	portaDB := 27017
 	nomeServidor := "Ipiranga"
-	//mqttBroker := getEnv("MQTT_BROKER", "tcp://172.16.103.11:1883")
+	//mqttBroker := getEnv("MQTT_BROKER", "tcp://172.18.0.1:1883")
 
 	var erro error
-	dbServer, erro = db.NovaConexaoDB(nomeServidor, "172.16.103.13", portaDB)
+	dbServer, erro = db.NovaConexaoDB(nomeServidor, "172.18.0.1", portaDB)
 	if erro != nil {
 		log.Fatal("Erro ao conectar ao MongoDB:", erro)
 	}
@@ -62,7 +62,7 @@ func main() {
 
 func configurarMQTT() {
 	// Configurar cliente MQTT
-	opts := mqtt.NewClientOptions().AddBroker("tcp://172.16.103.11:1884")
+	opts := mqtt.NewClientOptions().AddBroker("tcp://172.18.0.1:1884")
 	opts.SetClientID("servidor-ipiranga-mqtt")
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetPingTimeout(1 * time.Second)
@@ -141,7 +141,7 @@ func handleListarPostos(client mqtt.Client, msg mqtt.Message) {
 	todosPostos = append(todosPostos, postosLocais...)
 
 	for _, servidor := range servidores {
-		if servidor == "http://172.16.103.11:8084" {
+		if servidor == "http://172.18.0.1:8084" {
 			continue
 		}
 
@@ -252,6 +252,8 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	responseTopic := modelo.TopicResposta + "/" + data.ClientID
+
 	disponibilidade := make(map[string]bool)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -270,7 +272,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 	// consulta disponibilidade em outros servidores
 	for _, servidor := range servidores {
-		if servidor == "http://172.16.103.11:8084" {
+		if servidor == "http://172.18.0.1:8084" {
 			continue
 		}
 
@@ -301,6 +303,19 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 		for _, id := range data.IDPostos {
 			if !disponibilidade[id] {
 				log.Printf("Nem todos os postos estão disponíveis")
+				// Enviar a resposta via MQTT no tópico específico do cliente
+				reservaFalhou := true
+				payload, err := json.Marshal(reservaFalhou)
+				if err != nil {
+					log.Printf("Erro ao falha de reserva: %v", err)
+					return
+				}
+
+				token := mqttClient.Publish(responseTopic, 1, false, payload)
+				token.Wait()
+				if token.Error() != nil {
+					log.Printf("Erro ao publicar resposta de falha de reserva: %v", token.Error())
+				}
 				return
 			}
 		}
@@ -323,7 +338,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 		//atualiza nos outros servidores
 		for _, servidor := range servidores {
-			if servidor == "http://172.16.103.11:8084" {
+			if servidor == "http://172.18.0.1:8084" {
 				continue
 			}
 
@@ -374,7 +389,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 		//atualiza nos outros servidores
 		for _, servidor := range servidores {
-			if servidor == "http://172.16.103.11:8084" {
+			if servidor == "http://172.18.0.1:8084" {
 				continue
 			}
 
@@ -426,7 +441,7 @@ func postosDisponiveisHandler(c *gin.Context) {
 		var todosPostos []modelo.Posto
 
 		for _, servidor := range servidores {
-			if servidor == "http://172.16.103.11:8084" {
+			if servidor == "http://172.18.0.1:8084" {
 				continue
 			}
 
@@ -578,7 +593,7 @@ func editarPostoHandler(c *gin.Context) {
 
 	// consulta disponibilidade em outros servidores
 	for _, servidor := range servidores {
-		if servidor == "http://172.16.103.11:8084" {
+		if servidor == "http://172.18.0.1:8084" {
 			continue
 		}
 
@@ -632,7 +647,7 @@ func editarPostoHandler(c *gin.Context) {
 		//atualiza nos outros servidores
 		if c.Query("consultarOutrosServidores") != "false" {
 			for _, servidor := range servidores {
-				if servidor == "http://172.16.103.11:8084" {
+				if servidor == "http://172.18.0.1:8084" {
 					continue
 				}
 
@@ -694,7 +709,7 @@ func editarPostoHandler(c *gin.Context) {
 		//atualiza nos outros servidores
 		if c.Query("consultarOutrosServidores") != "false" {
 			for _, servidor := range servidores {
-				if servidor == "http://172.16.103.11:8084" {
+				if servidor == "http://172.18.0.1:8084" {
 					continue
 				}
 

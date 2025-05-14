@@ -10,4 +10,5 @@ type Posto struct {
 type ReservaData struct {
 	IDPostos []string `json:"idPostos"`
 	Reservar bool     `json:"reservar"`
+	ClientID string   `json:"clientId"`
 }
