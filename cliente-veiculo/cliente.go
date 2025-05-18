@@ -177,6 +177,8 @@ func onSubmit(reservar bool) {
 	if reservaFalhou {
 		fmt.Println("A reserva falhou!")
 		idPostos = []string{}
+	} else {
+		fmt.Println("Ok!!")
 	}
 }
 
@@ -330,9 +332,6 @@ func montarRotas(postos []modelo.Posto) map[int][]modelo.Posto {
 
 	return rotas
 }
-
-
-
 
 
 func procurarPostosParaReserva(rotas map[int][]modelo.Posto) {

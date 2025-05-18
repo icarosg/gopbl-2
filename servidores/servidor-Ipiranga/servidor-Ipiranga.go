@@ -371,6 +371,20 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 		}
 
 		log.Printf("Postos reservados com sucesso")
+
+		// Enviar a resposta via MQTT no tópico específico do cliente
+		reservaFalhou := false
+		payload, err := json.Marshal(reservaFalhou)
+		if err != nil {
+			log.Printf("Erro ao falha de reserva: %v", err)
+			return
+		}
+
+		token := mqttClient.Publish(responseTopic, 1, false, payload)
+		token.Wait()
+		if token.Error() != nil {
+			log.Printf("Erro ao publicar resposta de reserva concluida: %v", token.Error())
+		}
 	} else { //finalizar viagem
 		filtro := bson.M{
 			"id":             bson.M{"$in": data.IDPostos},
@@ -422,6 +436,20 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 		}
 
 		log.Printf("Postos liberados com sucesso")
+
+		// Enviar a resposta via MQTT no tópico específico do cliente
+		reservaFalhou := false
+		payload, err := json.Marshal(reservaFalhou)
+		if err != nil {
+			log.Printf("Erro ao codificar resposta de finalização de reserva: %v", err)
+			return
+		}
+
+		token := mqttClient.Publish(responseTopic, 1, false, payload)
+		token.Wait()
+		if token.Error() != nil {
+			log.Printf("Erro ao publicar resposta de falha de finalizar reserva: %v", token.Error())
+		}
 	}
 }
 
