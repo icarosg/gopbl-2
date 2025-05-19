@@ -23,6 +23,8 @@ import (
 	"bytes"
 	"encoding/json"
 
+	"sync"
+
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -35,6 +37,10 @@ var servidores = []string{
 var dbServer *db.ConexaoServidorDB
 var sincronizadorMQTT *db.SincronizadorMQTT
 var mqttClient mqtt.Client
+
+// para o intermediador de reservas
+var reservaMutex sync.Mutex
+var ultimaReserva time.Time
 
 func main() {
 	hostDB := getEnv("DB_HOST", "localhost")
@@ -92,6 +98,9 @@ func configurarMQTT() {
 	mqttClient.Subscribe(topicDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(topicCadastrar, 1, handleCadastrarPosto)
 	mqttClient.Subscribe(topicReservar, 1, handleReservarPosto)
+
+	// Inscrever no tópico intermediador de reserva
+	mqttClient.Subscribe(modelo.TopicReservaIntermediador, 1, handleReservaIntermediador)
 
 	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s\n",
 		topicDisponiveis, topicCadastrar, topicReservar)
@@ -408,6 +417,40 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 		log.Printf("Postos liberados com sucesso")
 	}
+}
+
+func handleReservaIntermediador(client mqtt.Client, msg mqtt.Message) {
+	// mutex para garantir via única
+	reservaMutex.Lock()
+	defer reservaMutex.Unlock()
+
+	// aguarda 0.3s desde a última publicação
+	delta := time.Since(ultimaReserva)
+	if delta < 300*time.Millisecond {
+		time.Sleep(300*time.Millisecond - delta)
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
+		log.Printf("Erro ao decodificar payload do intermediador: %v", err)
+		return
+	}
+
+	destino, ok := data["destino"].(string)
+	if !ok || destino == "" {
+		log.Printf("Payload sem campo 'destino' válido: %v", data)
+		return
+	}
+
+	// publica a mesma mensagem no tópico de destino
+	token := mqttClient.Publish(destino, 1, false, msg.Payload())
+	token.Wait()
+	if token.Error() != nil {
+		log.Printf("Erro ao publicar no destino %s: %v", destino, token.Error())
+		return
+	}
+	ultimaReserva = time.Now()
+	log.Printf("Reserva intermediada e publicada em %s", destino)
 }
 
 // obter variáveis de ambiente com valor padrão

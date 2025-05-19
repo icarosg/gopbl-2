@@ -2,10 +2,11 @@ package modelo
 
 const (
 	// Tópicos para comunicação entre cliente e servidor
-	TopicPostosDisponiveis = "postos/disponiveis"
-	TopicCadastrarPosto    = "postos/cadastrar"
-	TopicReservarPosto     = "postos/reservar"
-	TopicResposta          = "postos/resposta"
+	TopicPostosDisponiveis    = "postos/disponiveis"
+	TopicCadastrarPosto       = "postos/cadastrar"
+	TopicReservarPosto        = "postos/reservar"
+	TopicResposta             = "postos/resposta"
+	TopicReservaIntermediador = "postos/reserva/intermediador"
 
 	// Novos tópicos para comunicação específica por servidor
 	// O formato será "postos/servidor/{nome-servidor}/{operacao}"

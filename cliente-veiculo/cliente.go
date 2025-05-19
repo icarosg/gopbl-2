@@ -90,20 +90,25 @@ func conectarAoBroker() {
 }
 
 func onSubmit(idPostos []string, reservar bool) {
-	// se temos servidor preferido, usar o tópico específico
-	topic := modelo.TopicReservarPosto
+	// Todos os clientes publicam no tópico intermediador
+	topic := modelo.TopicReservaIntermediador
+
+	// O cliente deve informar o tópico de destino do servidor preferido
+	destino := modelo.TopicReservarPosto
 	if servidorPreferido != "" {
-		topic = modelo.GetTopicServidor(servidorPreferido, "reservar")
+		destino = modelo.GetTopicServidor(servidorPreferido, "reservar")
 	}
 
 	data := struct {
 		IDPostos []string `json:"idPostos"`
 		Reservar bool     `json:"reservar"`
 		ClientID string   `json:"clientId"`
+		Destino  string   `json:"destino"`
 	}{
 		IDPostos: idPostos,
 		Reservar: reservar,
 		ClientID: veiculo.ID,
+		Destino:  destino,
 	}
 
 	payload, err := json.Marshal(data)
@@ -119,7 +124,7 @@ func onSubmit(idPostos []string, reservar bool) {
 		return
 	}
 
-	fmt.Println("Solicitação de reserva enviada para o servidor", servidorPreferido)
+	fmt.Println("Solicitação de reserva enviada para o intermediador (destino:", destino, ")")
 }
 
 func listarPostos() []modelo.Posto {
