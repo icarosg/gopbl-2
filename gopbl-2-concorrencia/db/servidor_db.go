@@ -37,6 +37,12 @@ func NovaConexaoDB(nomeServidor, hostDB string, porta int) (*ConexaoServidorDB, 
 	// cada servidor tem seu database
 	dbName := fmt.Sprintf("reservas_%s", nomeServidor)
 
+	collection := cliente.Database(dbName).Collection("postos")
+	_, err := collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao limpar coleção 'postos': %v", err)
+	}
+
 	return &ConexaoServidorDB{
 		Cliente:          cliente,
 		PostosCollection: cliente.Database(dbName).Collection("postos"),

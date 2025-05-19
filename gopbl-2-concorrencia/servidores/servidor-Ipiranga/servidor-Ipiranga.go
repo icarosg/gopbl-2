@@ -37,6 +37,7 @@ var servidores = []string{
 var dbServer *db.ConexaoServidorDB
 var sincronizadorMQTT *db.SincronizadorMQTT
 var mqttClient mqtt.Client
+var ultimaReserva time.Time
 
 func main() {
 	//hostDB := getEnv("DB_HOST", "172.16.103.13")
@@ -90,6 +91,7 @@ func configurarMQTT() {
 	topicDisponiveis := modelo.GetTopicServidor(nomeServidor, "disponiveis")
 	topicCadastrar := modelo.GetTopicServidor(nomeServidor, "cadastrar")
 	topicReservar := modelo.GetTopicServidor(nomeServidor, "reservar")
+	topicEscutarBloqueio := modelo.TopicReservaEscutarBloqueio
 
 	// Chamar o intermediador de reserva
 	//intermediador_reserva.IniciarIntermediadorReserva(mqttClient)
@@ -97,6 +99,8 @@ func configurarMQTT() {
 	mqttClient.Subscribe(topicDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(topicCadastrar, 1, handleCadastrarPosto)
 	mqttClient.Subscribe(topicReservar, 1, handleReservarPosto)
+
+	mqttClient.Subscribe(topicEscutarBloqueio, 1, handleUltimaReserva)
 
 	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s\n",
 		topicDisponiveis, topicCadastrar, topicReservar)
@@ -251,134 +255,245 @@ func handleCadastrarPosto(client mqtt.Client, msg mqtt.Message) {
 }
 
 func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
-	var data models.ReservaData
-	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("Erro ao decodificar dados de reserva: %v", err)
-		return
-	}
+	if time.Since(ultimaReserva) > 1*time.Second { // executa o código se ultimaReserva for 1 segundo atrás ou mais
+		horarioAtual := time.Now()
 
-	responseTopic := modelo.TopicResposta + "/" + data.ClientID
-
-	disponibilidade := make(map[string]bool)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	filter := bson.M{"id": bson.M{"$in": data.IDPostos}}
-	cursor, err := dbServer.PostosCollection.Find(ctx, filter)
-	if err == nil {
-		var postos []modelo.Posto
-		if err = cursor.All(ctx, &postos); err == nil {
-			for _, posto := range postos {
-				disponibilidade[posto.ID] = posto.Disponivel
-			}
-		}
-	}
-	cursor.Close(ctx)
-
-	// consulta disponibilidade em outros servidores
-	for _, servidor := range servidores {
-		if servidor == "http://172.16.201.9:8084" {
-			continue
+		enviar := map[string]interface{}{
+			"horarioUltimaReserva": horarioAtual,
 		}
 
-		resp, err := http.Get(servidor + "/postosDisponiveis?consultarOutrosServidores=false")
+		enviarBytes, err := json.Marshal(enviar)
 		if err != nil {
-			log.Printf("Erro ao consultar no servidor: %v", err)
-			continue
-		}
-		defer resp.Body.Close()
-
-		var postos []modelo.Posto
-		err = json.NewDecoder(resp.Body).Decode(&postos)
-		if err != nil {
-			log.Printf("Erro ao decodificar resposta: %v", err)
-			continue
+			log.Printf("Erro ao serializar payload: %v", err)
+			return
 		}
 
-		for _, idPostoRequisicao := range data.IDPostos {
-			for _, posto := range postos {
-				if idPostoRequisicao == posto.ID {
+		topicPublicarHorario := modelo.TopicReservaEscutarBloqueio
+		token := mqttClient.Publish(topicPublicarHorario, 1, false, enviarBytes)
+		token.Wait()
+
+		// Verificar se houve erro na publicação
+		if token.Error() != nil {
+			log.Printf("Erro ao publicar resposta de reserva concluída: %v", token.Error())
+		} else {
+			log.Printf("Horário da última reserva publicado: %s", horarioAtual)
+		}
+
+		var data models.ReservaData
+		if err := json.Unmarshal(msg.Payload(), &data); err != nil {
+			log.Printf("Erro ao decodificar dados de reserva: %v", err)
+			return
+		}
+
+		responseTopic := modelo.TopicResposta + "/" + data.ClientID
+
+		disponibilidade := make(map[string]bool)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		filter := bson.M{"id": bson.M{"$in": data.IDPostos}}
+		cursor, err := dbServer.PostosCollection.Find(ctx, filter)
+		if err == nil {
+			var postos []modelo.Posto
+			if err = cursor.All(ctx, &postos); err == nil {
+				for _, posto := range postos {
 					disponibilidade[posto.ID] = posto.Disponivel
 				}
 			}
 		}
-	}
+		cursor.Close(ctx)
 
-	if data.Reservar { // verifica disponibilidade de todos os postos
-		for _, id := range data.IDPostos {
-			if !disponibilidade[id] {
-				log.Printf("Nem todos os postos estão disponíveis")
-				// Enviar a resposta via MQTT no tópico específico do cliente
-				reservaFalhou := true
-				payload, err := json.Marshal(reservaFalhou)
-				if err != nil {
-					log.Printf("Erro ao falha de reserva: %v", err)
-					return
-				}
-
-				token := mqttClient.Publish(responseTopic, 1, false, payload)
-				token.Wait()
-				if token.Error() != nil {
-					log.Printf("Erro ao publicar resposta de falha de reserva: %v", token.Error())
-				}
-				return
-			}
-		}
-
-		// todos postos estão disponíveis, então é reservado
-		filtro := bson.M{
-			"id":             bson.M{"$in": data.IDPostos},
-			"servidorOrigem": dbServer.Nome,
-		}
-		update := bson.M{"$set": bson.M{
-			"disponivel":        false,
-			"ultimaAtualizacao": time.Now(),
-		}}
-
-		_, err = dbServer.PostosCollection.UpdateMany(ctx, filtro, update)
-		if err != nil {
-			log.Printf("Erro ao atualizar os postos: %v", err)
-			return
-		}
-
-		//atualiza nos outros servidores
+		// consulta disponibilidade em outros servidores
 		for _, servidor := range servidores {
 			if servidor == "http://172.16.201.9:8084" {
 				continue
 			}
 
-			putData, erro := json.Marshal(struct {
-				IDPostos []string `json:"idPostos"`
-				Reservar bool     `json:"reservar"`
-			}{
-				IDPostos: data.IDPostos,
-				Reservar: data.Reservar,
-			})
-			if erro != nil {
-				log.Printf("Erro ao codificar JSON: %v", erro)
-				continue
-			}
-
-			req, erro := http.NewRequest(http.MethodPut, servidor+"/reservar?consultarOutrosServidores=false", bytes.NewBuffer(putData))
-			if erro != nil {
-				log.Printf("Erro ao criar requisição: %v", erro)
-				continue
-			}
-			req.Header.Set("Content-Type", "application/json")
-
-			client := &http.Client{}
-			resp, erro := client.Do(req)
-			if erro != nil {
-				log.Printf("Erro ao enviar requisição: %v", erro)
+			resp, err := http.Get(servidor + "/postosDisponiveis?consultarOutrosServidores=false")
+			if err != nil {
+				log.Printf("Erro ao consultar no servidor: %v", err)
 				continue
 			}
 			defer resp.Body.Close()
+
+			var postos []modelo.Posto
+			err = json.NewDecoder(resp.Body).Decode(&postos)
+			if err != nil {
+				log.Printf("Erro ao decodificar resposta: %v", err)
+				continue
+			}
+
+			for _, idPostoRequisicao := range data.IDPostos {
+				for _, posto := range postos {
+					if idPostoRequisicao == posto.ID {
+						disponibilidade[posto.ID] = posto.Disponivel
+					}
+				}
+			}
 		}
 
-		log.Printf("Postos reservados com sucesso")
+		if data.Reservar { // verifica disponibilidade de todos os postos
+			for _, id := range data.IDPostos {
+				if !disponibilidade[id] {
+					log.Printf("Nem todos os postos estão disponíveis")
+					// Enviar a resposta via MQTT no tópico específico do cliente
+					reservaFalhou := true
+					payload, err := json.Marshal(reservaFalhou)
+					if err != nil {
+						log.Printf("Erro ao falha de reserva: %v", err)
+						return
+					}
 
-		// Enviar a resposta via MQTT no tópico específico do cliente
-		reservaFalhou := false
+					token := mqttClient.Publish(responseTopic, 1, false, payload)
+					token.Wait()
+					if token.Error() != nil {
+						log.Printf("Erro ao publicar resposta de falha de reserva: %v", token.Error())
+					}
+					return
+				}
+			}
+
+			// todos postos estão disponíveis, então é reservado
+			filtro := bson.M{
+				"id":             bson.M{"$in": data.IDPostos},
+				"servidorOrigem": dbServer.Nome,
+			}
+			update := bson.M{"$set": bson.M{
+				"disponivel":        false,
+				"ultimaAtualizacao": time.Now(),
+			}}
+
+			_, err = dbServer.PostosCollection.UpdateMany(ctx, filtro, update)
+			if err != nil {
+				log.Printf("Erro ao atualizar os postos: %v", err)
+				return
+			}
+
+			//atualiza nos outros servidores
+			for _, servidor := range servidores {
+				if servidor == "http://172.16.201.9:8084" {
+					continue
+				}
+
+				putData, erro := json.Marshal(struct {
+					IDPostos []string `json:"idPostos"`
+					Reservar bool     `json:"reservar"`
+				}{
+					IDPostos: data.IDPostos,
+					Reservar: data.Reservar,
+				})
+				if erro != nil {
+					log.Printf("Erro ao codificar JSON: %v", erro)
+					continue
+				}
+
+				req, erro := http.NewRequest(http.MethodPut, servidor+"/reservar?consultarOutrosServidores=false", bytes.NewBuffer(putData))
+				if erro != nil {
+					log.Printf("Erro ao criar requisição: %v", erro)
+					continue
+				}
+				req.Header.Set("Content-Type", "application/json")
+
+				client := &http.Client{}
+				resp, erro := client.Do(req)
+				if erro != nil {
+					log.Printf("Erro ao enviar requisição: %v", erro)
+					continue
+				}
+				defer resp.Body.Close()
+			}
+
+			log.Printf("Postos reservados com sucesso")
+
+			// Enviar a resposta via MQTT no tópico específico do cliente
+			reservaFalhou := false
+			payload, err := json.Marshal(reservaFalhou)
+			if err != nil {
+				log.Printf("Erro ao falha de reserva: %v", err)
+				return
+			}
+
+			token := mqttClient.Publish(responseTopic, 1, false, payload)
+			token.Wait()
+			if token.Error() != nil {
+				log.Printf("Erro ao publicar resposta de reserva concluida: %v", token.Error())
+			}
+		} else { //finalizar viagem
+			filtro := bson.M{
+				"id":             bson.M{"$in": data.IDPostos},
+				"servidorOrigem": dbServer.Nome,
+			}
+			update := bson.M{"$set": bson.M{
+				"disponivel":        true,
+				"ultimaAtualizacao": time.Now(),
+			}}
+
+			_, err = dbServer.PostosCollection.UpdateMany(ctx, filtro, update)
+			if err != nil {
+				log.Printf("Erro ao atualizar os postos: %v", err)
+				return
+			}
+
+			//atualiza nos outros servidores
+			for _, servidor := range servidores {
+				if servidor == "http://172.16.201.9:8084" {
+					continue
+				}
+
+				putData, erro := json.Marshal(struct {
+					IDPostos []string `json:"idPostos"`
+					Reservar bool     `json:"reservar"`
+				}{
+					IDPostos: data.IDPostos,
+					Reservar: data.Reservar,
+				})
+				if erro != nil {
+					log.Printf("Erro ao codificar JSON: %v", erro)
+					continue
+				}
+
+				req, erro := http.NewRequest(http.MethodPut, servidor+"/reservar?consultarOutrosServidores=false", bytes.NewBuffer(putData))
+				if erro != nil {
+					log.Printf("Erro ao criar requisição: %v", erro)
+					continue
+				}
+				req.Header.Set("Content-Type", "application/json")
+
+				client := &http.Client{}
+				resp, erro := client.Do(req)
+				if erro != nil {
+					log.Printf("Erro ao enviar requisição: %v", erro)
+					continue
+				}
+				defer resp.Body.Close()
+			}
+
+			log.Printf("Postos liberados com sucesso")
+
+			// Enviar a resposta via MQTT no tópico específico do cliente
+			reservaFalhou := false
+			payload, err := json.Marshal(reservaFalhou)
+			if err != nil {
+				log.Printf("Erro ao codificar resposta de finalização de reserva: %v", err)
+				return
+			}
+
+			token := mqttClient.Publish(responseTopic, 1, false, payload)
+			token.Wait()
+			if token.Error() != nil {
+				log.Printf("Erro ao publicar resposta de falha de finalizar reserva: %v", token.Error())
+			}
+		}
+	} else {
+		var data models.ReservaData
+		if err := json.Unmarshal(msg.Payload(), &data); err != nil {
+			log.Printf("Erro ao decodificar dados de reserva: %v", err)
+			return
+		}
+
+		responseTopic := modelo.TopicResposta + "/" + data.ClientID
+
+		reservaFalhou := true
 		payload, err := json.Marshal(reservaFalhou)
 		if err != nil {
 			log.Printf("Erro ao falha de reserva: %v", err)
@@ -388,74 +503,24 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 		token := mqttClient.Publish(responseTopic, 1, false, payload)
 		token.Wait()
 		if token.Error() != nil {
-			log.Printf("Erro ao publicar resposta de reserva concluida: %v", token.Error())
+			log.Printf("Erro ao publicar resposta de falha de reserva: %v", token.Error())
 		}
-	} else { //finalizar viagem
-		filtro := bson.M{
-			"id":             bson.M{"$in": data.IDPostos},
-			"servidorOrigem": dbServer.Nome,
-		}
-		update := bson.M{"$set": bson.M{
-			"disponivel":        true,
-			"ultimaAtualizacao": time.Now(),
-		}}
-
-		_, err = dbServer.PostosCollection.UpdateMany(ctx, filtro, update)
-		if err != nil {
-			log.Printf("Erro ao atualizar os postos: %v", err)
-			return
-		}
-
-		//atualiza nos outros servidores
-		for _, servidor := range servidores {
-			if servidor == "http://172.16.201.9:8084" {
-				continue
-			}
-
-			putData, erro := json.Marshal(struct {
-				IDPostos []string `json:"idPostos"`
-				Reservar bool     `json:"reservar"`
-			}{
-				IDPostos: data.IDPostos,
-				Reservar: data.Reservar,
-			})
-			if erro != nil {
-				log.Printf("Erro ao codificar JSON: %v", erro)
-				continue
-			}
-
-			req, erro := http.NewRequest(http.MethodPut, servidor+"/reservar?consultarOutrosServidores=false", bytes.NewBuffer(putData))
-			if erro != nil {
-				log.Printf("Erro ao criar requisição: %v", erro)
-				continue
-			}
-			req.Header.Set("Content-Type", "application/json")
-
-			client := &http.Client{}
-			resp, erro := client.Do(req)
-			if erro != nil {
-				log.Printf("Erro ao enviar requisição: %v", erro)
-				continue
-			}
-			defer resp.Body.Close()
-		}
-
-		log.Printf("Postos liberados com sucesso")
-
-		// Enviar a resposta via MQTT no tópico específico do cliente
-		reservaFalhou := false
-		payload, err := json.Marshal(reservaFalhou)
-		if err != nil {
-			log.Printf("Erro ao codificar resposta de finalização de reserva: %v", err)
-			return
-		}
-
-		token := mqttClient.Publish(responseTopic, 1, false, payload)
-		token.Wait()
-		if token.Error() != nil {
-			log.Printf("Erro ao publicar resposta de falha de finalizar reserva: %v", token.Error())
-		}
+		return
 	}
+}
+
+func handleUltimaReserva(client mqtt.Client, msg mqtt.Message) {
+	var request struct {
+		HorarioUltimaReserva time.Time `json:"horarioUltimaReserva"`
+	}
+
+	if err := json.Unmarshal(msg.Payload(), &request); err != nil {
+		log.Printf("Erro ao decodificar solicitação: %v", err)
+		return
+	}
+
+	ultimaReserva = request.HorarioUltimaReserva
+	fmt.Println("Atualizado tempo de última reserva!!")
 }
 
 // obter variáveis de ambiente com valor padrão

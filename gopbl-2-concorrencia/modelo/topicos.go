@@ -7,6 +7,8 @@ const (
 	TopicReservarPosto        = "postos/reservar"
 	TopicResposta             = "postos/resposta"
 	TopicReservaIntermediador = "postos/reserva/intermediador"
+	TopicReservaBloqueio      = "postos/reserva/bloqueio"
+	TopicReservaEscutarBloqueio      = "postos/reserva/escutarBloqueio"
 
 	// Novos tópicos para comunicação específica por servidor
 	// O formato será "postos/servidor/{nome-servidor}/{operacao}"

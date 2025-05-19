@@ -97,11 +97,9 @@ func conectarAoBroker() {
 
 func onSubmit(reservar bool) {
 	// se temos servidor preferido, usar o tópico específico
-	topic := modelo.TopicReservaIntermediador
-
-	destino := modelo.TopicReservarPosto
+	topic := modelo.TopicReservarPosto
 	if servidorPreferido != "" {
-		destino = modelo.GetTopicServidor(servidorPreferido, "reservar")
+		topic = modelo.GetTopicServidor(servidorPreferido, "reservar")
 	}
 
 	done := make(chan bool, 1) // Buffer de 1 para evitar goroutine leak
@@ -147,7 +145,6 @@ func onSubmit(reservar bool) {
 		IDPostos: idPostos,
 		Reservar: reservar,
 		ClientID: veiculo.ID,
-		Destino:  destino,
 	}
 
 	payload, err := json.Marshal(data)
@@ -163,7 +160,7 @@ func onSubmit(reservar bool) {
 		return
 	}
 
-	fmt.Println("Solicitação de reserva enviada para o intermediador (destino:", destino, ")")
+	fmt.Println("Solicitação de reserva enviada para o servidor")
 
 	// aguarda a resposta ou timeout
 	select {
