@@ -1,4 +1,4 @@
-package main
+package intermediador_reserva
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 var intermediadorMutex sync.Mutex
 var ultimaReservaIntermediada time.Time
 
-func iniciarIntermediadorReserva(mqttClient mqtt.Client) {
+func IniciarIntermediadorReserva(mqttClient mqtt.Client) {
 	mqttClient.Subscribe(modelo.TopicReservaIntermediador, 1, handleReservaIntermediador)
 	log.Printf("Intermediador de reserva inscrito em %s", modelo.TopicReservaIntermediador)
 }
