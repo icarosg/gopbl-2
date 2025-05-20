@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"gopbl-2/modelo"
+	"sort"
 
 	"encoding/json"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"os"
 	"sync"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var veiculo modelo.Veiculo
@@ -264,9 +266,23 @@ func listarPostos() []modelo.Posto {
 	rotasGeradas := montarRotas(postos)
 	// Exibir os postos
 	if len(rotasGeradas) > 0 {
-		fmt.Printf("\n\nRotas disponíveis:\n")
-		for id, rota := range rotasGeradas {
-			fmt.Printf("Rota %d: %v\n", id, rota)
+		// fmt.Printf("\n\nRotas disponíveis:\n")
+		// for id, rota := range rotasGeradas {
+		// 	fmt.Printf("Rota %d: %v\n", id, rota)
+		// }
+		var chaves []int
+		for k := range rotasGeradas {
+			chaves = append(chaves, k)
+		}
+		sort.Ints(chaves)
+		fmt.Println("\n--- Rotas Disponíveis ---")
+		for _, idx := range chaves {
+			rota := rotasGeradas[idx]
+			fmt.Printf("Rota %d: ", idx)
+			for _, posto := range rota {
+				fmt.Printf("%s ", posto.ID)
+			}
+			fmt.Println()
 		}
 	} else {
 		fmt.Println("Nenhuma rota disponível encontrada")
@@ -337,14 +353,21 @@ func montarRotas(postos []modelo.Posto) map[int][]modelo.Posto {
 
 func procurarPostosParaReserva(rotas map[int][]modelo.Posto) {
 	var escolha int
-	fmt.Println("\n--- Rotas Disponíveis ---")
-	for idx, rota := range rotas {
-		fmt.Printf("Rota %d: ", idx)
-		for _, posto := range rota {
-			fmt.Printf("%s ", posto.ID)
-		}
-		fmt.Println()
-	}
+	
+	// var chaves []int
+	// for k := range rotas {
+	// 	chaves = append(chaves, k)
+	// }
+	// sort.Ints(chaves)
+	// fmt.Println("\n--- Rotas Disponíveis ---")
+	// for _, idx := range chaves {
+	// 	rota := rotas[idx]
+	// 	fmt.Printf("Rota %d: ", idx)
+	// 	for _, posto := range rota {
+	// 		fmt.Printf("%s ", posto.ID)
+	// 	}
+	// 	fmt.Println()
+	// }
 
 	fmt.Println("\nDigite o número da rota que deseja reservar, ou -1 para sair:")
 	fmt.Scanln(&escolha)

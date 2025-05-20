@@ -28,7 +28,7 @@ import (
 var servidores = []string{
 	"http://172.16.201.14:8083", //22
 	"http://172.16.201.11:8085", //shell
-	"http://172.16.201.9:8084", //ipiranga
+	"http://172.16.201.15:8084", //ipiranga
 }
 
 var dbServer *db.ConexaoServidorDB
@@ -84,18 +84,21 @@ func configurarMQTT() {
 	mqttClient.Subscribe(modelo.TopicPostosDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(modelo.TopicCadastrarPosto, 1, handleCadastrarPosto)
 	mqttClient.Subscribe(modelo.TopicReservarPosto, 1, handleReservarPosto)
+	mqttClient.Subscribe(modelo.TopicDeletarPosto, 1, handleDeletarPosto)
 
 	// Inscrever nos tópicos específicos para este servidor
 	topicDisponiveis := modelo.GetTopicServidor(nomeServidor, "disponiveis")
 	topicCadastrar := modelo.GetTopicServidor(nomeServidor, "cadastrar")
 	topicReservar := modelo.GetTopicServidor(nomeServidor, "reservar")
+	topicDeletar := modelo.GetTopicServidor(nomeServidor, "deletar")
 
 	mqttClient.Subscribe(topicDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(topicCadastrar, 1, handleCadastrarPosto)
 	mqttClient.Subscribe(topicReservar, 1, handleReservarPosto)
+	mqttClient.Subscribe(topicDeletar, 1, handleDeletarPosto)
 
 	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s\n",
-		topicDisponiveis, topicCadastrar, topicReservar)
+		topicDisponiveis, topicCadastrar, topicDeletar, topicReservar)
 }
 
 func handleListarPostos(client mqtt.Client, msg mqtt.Message) {
@@ -163,7 +166,7 @@ func handleListarPostos(client mqtt.Client, msg mqtt.Message) {
 
 		todosPostos = append(todosPostos, postos...)
 	}
-	
+
 	// Enviar a resposta via MQTT no tópico específico do cliente
 	payload, err := json.Marshal(todosPostos)
 	if err != nil {
@@ -243,6 +246,36 @@ func handleCadastrarPosto(client mqtt.Client, msg mqtt.Message) {
 		}
 	} else {
 		log.Printf("Resposta enviada com sucesso")
+	}
+}
+
+func handleDeletarPosto(client mqtt.Client, msg mqtt.Message) {
+	var posto modelo.Posto
+	if err := json.Unmarshal(msg.Payload(), &posto); err != nil {
+		log.Printf("Erro ao decodificar posto: %v", err)
+		return
+	}
+
+	log.Printf("Recebida solicitação para deletar posto: %s no servidor %s", posto.ID, posto.ServidorOrigem)
+
+	collection := dbServer.PostosCollection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"id": posto.ID}
+	var existente modelo.Posto
+	resp := collection.FindOne(ctx, filter).Decode(&existente) // verifica se já existe um posto com o mesmo nome
+
+	if resp == nil {
+		// se encontrou o posto, deleta
+		_, err := collection.DeleteOne(ctx, filter)
+		if err != nil {
+			log.Printf("Erro ao deletar posto: %v", err)
+		} else {
+			log.Printf("\nPosto deletado!")
+		}
+	} else {
+		log.Printf("Posto não encontrado para deleção.")
 	}
 }
 

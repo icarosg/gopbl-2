@@ -4,7 +4,8 @@ import (
 	"gopbl-2/db"
 	"gopbl-2/modelo"
 	"gopbl-2/models"
-	"gopbl-2/servidores"
+
+	//"gopbl-2/servidores"
 
 	//"gopbl-2/models"
 
@@ -30,20 +31,19 @@ import (
 var servidores = []string{
 	"http://172.16.201.14:8083", //22
 	"http://172.16.201.11:8085", //shell
-	"http://172.16.201.9:8084",  //ipiranga
+	"http://172.16.201.15:8084", //ipiranga
 }
 
 var dbServer *db.ConexaoServidorDB
 var sincronizadorMQTT *db.SincronizadorMQTT
 var mqttClient mqtt.Client
-
 var ultimaReserva time.Time
 
 func main() {
 	//hostDB := getEnv("DB_HOST", "172.16.103.13")
 	portaDB := 27017
 	nomeServidor := "22"
-	//mqttBroker := getEnv("MQTT_BROKER", "tcp://localhost:1883")
+	//mqttBroker := getEnv("MQTT_BROKER", "tcp://172.16.201.14:1883")
 
 	var erro error
 	dbServer, erro = db.NovaConexaoDB(nomeServidor, "172.16.201.9", portaDB)
@@ -85,22 +85,25 @@ func configurarMQTT() {
 	// Inscrever nos tópicos gerais para manter compatibilidade com clientes existentes
 	mqttClient.Subscribe(modelo.TopicPostosDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(modelo.TopicCadastrarPosto, 1, handleCadastrarPosto)
+	mqttClient.Subscribe(modelo.TopicDeletarPosto, 1, handleDeletarPosto)
 	mqttClient.Subscribe(modelo.TopicReservarPosto, 1, handleReservarPosto)
 
 	// Inscrever nos tópicos específicos para este servidor
 	topicDisponiveis := modelo.GetTopicServidor(nomeServidor, "disponiveis")
 	topicCadastrar := modelo.GetTopicServidor(nomeServidor, "cadastrar")
 	topicReservar := modelo.GetTopicServidor(nomeServidor, "reservar")
-
-	// Chamar o intermediador de reserva
-	intermediador_reserva.IniciarIntermediadorReserva(mqttClient)
+	topicDeletar := modelo.GetTopicServidor(nomeServidor, "deletar")
+	topicEscutarBloqueio := modelo.TopicReservaEscutarBloqueio
 
 	mqttClient.Subscribe(topicDisponiveis, 1, handleListarPostos)
 	mqttClient.Subscribe(topicCadastrar, 1, handleCadastrarPosto)
 	mqttClient.Subscribe(topicReservar, 1, handleReservarPosto)
+	mqttClient.Subscribe(topicDeletar, 1, handleDeletarPosto)
+
+	mqttClient.Subscribe(topicEscutarBloqueio, 1, handleUltimaReserva)
 
 	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s\n",
-		topicDisponiveis, topicCadastrar, topicReservar)
+		topicDisponiveis, topicCadastrar, topicReservar, topicDeletar)
 }
 
 func handleListarPostos(client mqtt.Client, msg mqtt.Message) {
@@ -251,6 +254,36 @@ func handleCadastrarPosto(client mqtt.Client, msg mqtt.Message) {
 	}
 }
 
+func handleDeletarPosto(client mqtt.Client, msg mqtt.Message) {
+	var posto modelo.Posto
+	if err := json.Unmarshal(msg.Payload(), &posto); err != nil {
+		log.Printf("Erro ao decodificar posto: %v", err)
+		return
+	}
+
+	log.Printf("Recebida solicitação para deletar posto: %s no servidor %s", posto.ID, posto.ServidorOrigem)
+
+	collection := dbServer.PostosCollection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"id": posto.ID}
+	var existente modelo.Posto
+	resp := collection.FindOne(ctx, filter).Decode(&existente) // verifica se já existe um posto com o mesmo nome
+
+	if resp == nil {
+		// se encontrou o posto, deleta
+		_, err := collection.DeleteOne(ctx, filter)
+		if err != nil {
+			log.Printf("Erro ao deletar posto: %v", err)
+		} else {
+			log.Printf("\nPosto deletado!")
+		}
+	} else {
+		log.Printf("Posto não encontrado para deleção.")
+	}
+}
+
 func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 	if time.Since(ultimaReserva) > 1*time.Second { // executa o código se ultimaReserva for 1 segundo atrás ou mais
 		horarioAtual := time.Now()
@@ -302,7 +335,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 		// consulta disponibilidade em outros servidores
 		for _, servidor := range servidores {
-			if servidor == "http://172.16.201.14:8084" {
+			if servidor == "http://172.16.201.14:8083" {
 				continue
 			}
 
@@ -368,7 +401,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 			//atualiza nos outros servidores
 			for _, servidor := range servidores {
-				if servidor == "http://172.16.201.14:8084" {
+				if servidor == "http://172.16.201.14:8083" {
 					continue
 				}
 
@@ -433,7 +466,7 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 
 			//atualiza nos outros servidores
 			for _, servidor := range servidores {
-				if servidor == "http://172.16.201.14:8084" {
+				if servidor == "http://172.16.201.14:8083" {
 					continue
 				}
 
@@ -504,6 +537,20 @@ func handleReservarPosto(client mqtt.Client, msg mqtt.Message) {
 		}
 		return
 	}
+}
+
+func handleUltimaReserva(client mqtt.Client, msg mqtt.Message) {
+	var request struct {
+		HorarioUltimaReserva time.Time `json:"horarioUltimaReserva"`
+	}
+
+	if err := json.Unmarshal(msg.Payload(), &request); err != nil {
+		log.Printf("Erro ao decodificar solicitação: %v", err)
+		return
+	}
+
+	ultimaReserva = request.HorarioUltimaReserva
+	fmt.Println("Atualizado tempo de última reserva!!")
 }
 
 // obter variáveis de ambiente com valor padrão

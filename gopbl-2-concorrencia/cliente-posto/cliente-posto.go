@@ -24,7 +24,6 @@ var cadastroConcluido chan bool = make(chan bool, 1)
 // servidorEnv := os.Getenv("POSTO_SERVIDOR")
 // cidadeEnv := os.Getenv("POSTO_CIDADE")
 
-
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 	fmt.Println("Conectado ao broker MQTT")
 }
@@ -149,10 +148,26 @@ func main() {
 	// Esperar sinal de interrupção
 	<-c
 	fmt.Println("\nRecebido sinal de interrupção. Encerrando cliente...")
+
+	// Publicar no tópico de deletação antes de desconectar
+	topic = modelo.TopicCadastrarPosto
+	if posto_criado.ServidorOrigem != "" {
+		topic = modelo.GetTopicServidor(posto_criado.ServidorOrigem, "deletar")
+		fmt.Printf("Enviando para tópico específico: %s\n", topic)
+	}
+	payload, _ = json.Marshal(posto_criado)
+	token = client.Publish(topic, 1, false, payload)
+	if token.Wait() && token.Error() != nil {
+		fmt.Println("Erro ao publicar mensagem de deletação:", token.Error())
+	} else {
+		fmt.Println("Mensagem de deletação publicada com sucesso.")
+	}
+
+	// Desconectar do broker
 	client.Disconnect(250)
 }
 
-func gerarPostos(){
+func gerarPostos() {
 	idEnv := os.Getenv("POSTO_ID")
 	latEnv, _ := strconv.ParseFloat(os.Getenv("POSTO_LAT"), 64)
 	longEnv, _ := strconv.ParseFloat(os.Getenv("POSTO_LONG"), 64)
@@ -212,10 +227,10 @@ func cadastrarPosto() {
 	case 8:
 		cidade = "florianópolis"
 	case 9:
-		cidade = "Joinville"		
+		cidade = "Joinville"
 	default:
 		fmt.Println("opção invalida, cidade padrão: Feira de Santana")
-		cidade = "Feira de Santana" 
+		cidade = "Feira de Santana"
 	}
 	switch opcao {
 	case 1:
@@ -232,10 +247,10 @@ func cadastrarPosto() {
 		case 2:
 			cidade = "são Gonçalo"
 		case 3:
-			cidade = "serrinha"		
+			cidade = "serrinha"
 		default:
 			fmt.Println("opção invalida, cidade padrão: Feira de Santana")
-			cidade = "Feira de Santana" 
+			cidade = "Feira de Santana"
 		}
 	case 2:
 		servidor = "22"
@@ -251,10 +266,10 @@ func cadastrarPosto() {
 		case 2:
 			cidade = "Petrolina"
 		case 3:
-			cidade = "Recife"		
+			cidade = "Recife"
 		default:
 			fmt.Println("opção invalida, cidade padrão: Caruaru")
-			cidade = "Caruaru" 
+			cidade = "Caruaru"
 		}
 	case 3:
 		servidor = "Shell"
@@ -270,10 +285,10 @@ func cadastrarPosto() {
 		case 2:
 			cidade = "florianópolis"
 		case 3:
-			cidade = "Joinville"		
+			cidade = "Joinville"
 		default:
 			fmt.Println("opção invalida, cidade padrão: Chapecó")
-			cidade = "Chapecó" 
+			cidade = "Chapecó"
 		}
 	default:
 		fmt.Println("Opção inválida. Utilizando Ipiranga como padrão.")
