@@ -1,0 +1,15 @@
+FROM golang:1.23
+
+WORKDIR /app
+
+# Copiar o go.mod e go.sum
+COPY go.mod go.sum ./
+
+# Download das dependências
+RUN go mod download
+
+# Copiar o resto do código
+COPY . .
+
+# Executar o cliente
+CMD ["go", "run", "./cliente-posto/cliente-posto.go"]
