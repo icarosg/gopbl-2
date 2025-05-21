@@ -7,6 +7,7 @@ import (
 
 	"encoding/json"
 	"os"
+	"os/signal"
 	"sync"
 	"time"
 
@@ -23,7 +24,54 @@ var listarMutex sync.Mutex   // mutex para evitar chamadas concorrentes à funç
 var servidorPreferido string // armazena o servidor preferido do cliente
 
 func main() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	// Goroutine para tratar o sinal
+	go func() {
+		<-c
+		fmt.Println("\nRecebido sinal de interrupção. Encerrando cliente e enviando solicitação para desreservar os postos, caso tenha...")
+
+		if len(idPostos) > 0 && veiculo.ID != "" {
+			topic := modelo.TopicReservarPosto
+			if servidorPreferido != "" {
+				topic = modelo.GetTopicServidor(servidorPreferido, "reservar")
+			}
+
+			data := struct {
+				IDPostos []string `json:"idPostos"`
+				Reservar bool     `json:"reservar"`
+				ClientID string   `json:"clientId"`
+			}{
+				IDPostos: idPostos,
+				Reservar: false,
+				ClientID: veiculo.ID,
+			}
+
+			payload, err := json.Marshal(data)
+			if err != nil {
+				fmt.Println("Erro ao codificar JSON:", err)
+				os.Exit(1)
+			}
+
+			token := client.Publish(topic, 1, false, payload)
+			token.Wait()
+			if token.Error() != nil {
+				fmt.Println("Erro ao publicar mensagem:", token.Error())
+				os.Exit(1)
+			}
+
+			fmt.Println("Mensagem publicada")
+		}
+
+		client.Disconnect(250)
+		fmt.Println("Cliente desconectado")
+		os.Exit(0)
+	}()
+
 	menu()
+
+	select {} // Previne encerramento imediato, se `menu` retornar
 }
 
 func cadastrarVeiculo() {

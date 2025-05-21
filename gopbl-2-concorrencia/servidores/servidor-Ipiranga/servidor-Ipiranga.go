@@ -105,7 +105,7 @@ func configurarMQTT() {
 
 	mqttClient.Subscribe(topicEscutarBloqueio, 1, handleUltimaReserva)
 
-	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s\n",
+	fmt.Printf("Servidor inscrito em tópicos específicos: %s, %s, %s, %s\n",
 		topicDisponiveis, topicCadastrar, topicDeletar, topicReservar)
 }
 
