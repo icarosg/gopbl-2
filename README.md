@@ -117,7 +117,7 @@ make shell-1           # Posto Shell em Feira de Santana
 ```
 
 ## Detalhes Técnicos
-
+Observação sempre lembre de alterar os IP's nos arquivos dos servidores!
 ### Concorrência
 - Uso de goroutines para operações assíncronas
 - Mutex para controle de acesso concorrente
